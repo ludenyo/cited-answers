@@ -1,0 +1,8 @@
+{
+  "name": "cited-answers-evals",
+  "private": true,
+  "description": "Dev tooling only: runs the promptfoo evals. The service itself is Python.",
+  "devDependencies": {
+    "promptfoo": "0.125.1"
+  }
+}

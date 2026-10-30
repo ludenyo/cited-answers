@@ -10,7 +10,7 @@ from cited_answers.models import Claim
 from cited_answers.settings import get_app_config
 from cited_answers.verify import compute_derived, values_match
 
-EVAL_FILE = Path(__file__).parents[1] / "evals" / "questions_draft.yaml"
+EVAL_FILE = Path(__file__).parents[1] / "evals" / "questions.yaml"
 QUESTIONS: list[dict[str, Any]] = yaml.safe_load(EVAL_FILE.read_text())["questions"]
 CATEGORIES = {"easy": 5, "compare": 5, "vague": 3, "latest": 2, "trap": 5, "guardrail": 10}
 FIGURE_ID = re.compile(r"^[A-Z]{3}:[A-Z0-9.]+:\d{4}$")

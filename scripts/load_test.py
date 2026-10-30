@@ -36,7 +36,7 @@ import httpx2
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_QUESTIONS = ROOT / "evals" / "questions_draft.yaml"
+DEFAULT_QUESTIONS = ROOT / "evals" / "questions.yaml"
 
 Pair = tuple[str, str]  # (country_code, indicator_code)
 LatestYears = dict[Pair, int]
