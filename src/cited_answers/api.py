@@ -9,7 +9,7 @@ from typing import Annotated
 import anthropic
 from fastapi import Depends, FastAPI, HTTPException
 
-from cited_answers import retrieval
+from cited_answers import retrieval, tracing
 from cited_answers.answer import ask, load_system_prompt, run_tool
 from cited_answers.db import connect
 from cited_answers.models import AskRequest, AskResponse
@@ -61,7 +61,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     Settings.from_env()  # raises SettingsError when ANTHROPIC_MODEL is unset
     load_system_prompt(get_app_config().answer.prompt_path)  # raises if the file is gone
+    tracing.init_tracing()  # never raises: a tracing problem must not stop the app
     yield
+    tracing.shutdown_tracing()  # send queued traces before exiting
 
 
 def create_app() -> FastAPI:

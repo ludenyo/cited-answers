@@ -31,11 +31,14 @@ cited-answers/
 │   ├── settings.py        # env settings + typed config/app.yaml
 │   ├── retrieval.py       # search_figures (pgvector cosine), get_figure, get_figure_by_id, list_indicators
 │   ├── answer.py          # tool loop; the answer comes back via a submit_answer tool
+│   ├── tracing.py         # Langfuse wrapper: spans, scores, masking; never raises
+│   ├── trace_format.py    # Anthropic messages -> the role format Langfuse renders
 │   └── verify.py          # checks every claim against its cited figure
 ├── prompts/answer_system.md  # system prompt, versioned on its own
 ├── migrations/            # numbered SQL files
 ├── config/indicators.yaml # ingestion: countries, indicators, start year, unit overrides
 ├── config/app.yaml        # retrieval, llm loop, verification tolerances, prompt file
+├── scripts/load_test.py   # sends every eval question 5 times to a running /ask
 ├── evals/questions_draft.yaml  # 18 draft eval questions (easy, compare, vague, trap), not yet run
 ├── tests/                 # pytest suite, mirrors the package
 ├── docker-compose.yml     # Postgres + pgvector
@@ -53,6 +56,7 @@ make test     # pytest, loading .env so the DB tests run (they skip without TEST
 make lint     # ruff check + ruff format --check
 make migrate  # apply SQL migrations
 make ingest   # migrate, then fetch World Bank data and embed it
+make load-test  # 18 eval questions x 5 against a running server (about 90 real model calls)
 ```
 
 ## Database port
@@ -88,6 +92,37 @@ The sign follows the formula, so a fall is negative; a claim of +87.9 for a fall
 87.9 fails on purpose. Both kinds use the tolerances in `config/app.yaml`. All `Claim`
 fields are required (null or empty when unused) so the strict `submit_answer` schema
 works. Text numbers are not parsed: only the claims list is verified.
+
+## Tracing (Langfuse)
+
+Each `/ask` request is one trace named `answer-question`, tagged `prompt:<hash>` (the
+first 8 characters of the SHA-256 of `prompts/answer_system.md`) so prompt versions can
+be compared. Spans, all under the root `agent` span:
+
+| Span | Type | What it holds |
+|---|---|---|
+| `call-model` (one per model call) | generation | model, input and output tokens, the full message history, tool calls |
+| `search-figures`, `get-figure`, `list-indicators` | retriever | the lookup and what it returned; a miss is `{"found": false}` |
+| `embed-question` (inside `search-figures`) | embedding | the embedding model and vector size |
+| `verify-claims` | evaluator | each claim and whether it passed |
+
+Two scores go on every trace: `citation_pass_rate` (numeric) and `insufficient_data`
+(boolean). The environment comes from `LANGFUSE_TRACING_ENVIRONMENT`.
+
+- **Tracing never breaks a request.** Every SDK call goes through `tracing.py`, which
+  logs and carries on if Langfuse is down or the SDK fails. Export runs on a background
+  thread. Errors raised by the traced code itself still propagate unchanged.
+- **Off by default in tests.** `tests/conftest.py` forces `LANGFUSE_TRACING_ENABLED=false`
+  because `make test` loads `.env`, which holds real keys. Tests that need tracing build
+  a client with an in-memory exporter via `tracing.create_client`.
+- **The Anthropic SDK 2.x emits its own `anthropic.messages.create` span.** It is dropped
+  at export (`tracing.should_export_span`) because `call-model` already records the call
+  with the messages; keeping both would double every token and cost total.
+- **Masking:** API keys and email addresses are redacted from input and output. The SDK's
+  mask does not cover metadata, so never put user text or secrets in metadata.
+- Not done: prompts are files in this repo, not Langfuse-managed, so traces are not linked
+  to a Langfuse prompt object. There is no `user_id` (no auth) or `session_id` (single
+  turn). Thinking text is omitted by default on Haiku 5.5, so generations carry none.
 
 ## Rules
 

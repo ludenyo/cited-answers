@@ -14,9 +14,10 @@ import anthropic
 import psycopg
 from pydantic import ValidationError
 
-from cited_answers import retrieval
-from cited_answers.models import Answer, AskResponse, FigureResult
+from cited_answers import retrieval, tracing
+from cited_answers.models import Answer, AskResponse, FigureResult, VerifiedClaim
 from cited_answers.settings import AppConfig, Settings
+from cited_answers.trace_format import messages_for_trace, response_for_trace, usage_for_trace
 from cited_answers.verify import Lookup, pass_rate, verify_claims
 
 SUBMIT_TOOL = "submit_answer"
@@ -180,6 +181,7 @@ class Usage:
 class LoopResult:
     answer: Answer
     usage: Usage
+    hit_iteration_limit: bool = False
 
 
 def _insufficient(message: str) -> Answer:
@@ -210,6 +212,38 @@ def _parse_submission(block: Any) -> tuple[Answer | None, dict[str, Any] | None]
         return None, _result(block.id, f"Invalid answer, fix and resubmit: {exc}", is_error=True)
 
 
+def _call_model(
+    client: anthropic.Anthropic,
+    messages: list[dict[str, Any]],
+    settings: Settings,
+    system_prompt: str,
+) -> Any:
+    """One model call, recorded as its own generation with model, tokens and messages."""
+    parameters = {"max_tokens": settings.max_tokens, "effort": "low"}
+    with tracing.observation(
+        "call-model",
+        "generation",
+        model=settings.model,
+        model_parameters=parameters,
+        # Converted now: `messages` keeps growing after this call.
+        input=messages_for_trace(system_prompt, messages),
+    ) as span:
+        response = client.messages.create(
+            model=settings.model,
+            max_tokens=settings.max_tokens,
+            system=system_prompt,
+            tools=TOOLS,
+            messages=messages,
+            output_config={"effort": "low"},  # keeps a lookup task cheap and fast
+        )
+        span.update(
+            output=response_for_trace(response),
+            usage_details=usage_for_trace(response),
+            metadata={"stop_reason": response.stop_reason},
+        )
+    return response
+
+
 def _step(
     client: anthropic.Anthropic,
     messages: list[dict[str, Any]],
@@ -219,14 +253,7 @@ def _step(
     usage: Usage,
 ) -> Answer | None:
     """One model turn. Returns the Answer once submitted, else None to continue."""
-    response = client.messages.create(
-        model=settings.model,
-        max_tokens=settings.max_tokens,
-        system=system_prompt,
-        tools=TOOLS,
-        messages=messages,
-        output_config={"effort": "low"},  # keeps a lookup task cheap and fast
-    )
+    response = _call_model(client, messages, settings, system_prompt)
     usage.add(response)
     if response.stop_reason == "refusal":
         return _insufficient("The model declined to answer this question.")
@@ -265,7 +292,44 @@ def answer_question(
         if answer:
             return LoopResult(answer, usage)
     message = "The question could not be answered within the allowed steps."
-    return LoopResult(_insufficient(message), usage)
+    return LoopResult(_insufficient(message), usage, hit_iteration_limit=True)
+
+
+def _verify_traced(
+    claims: list[Any], lookup: Lookup, config: AppConfig
+) -> tuple[list[VerifiedClaim], float]:
+    """Verification as its own span: input is the claims, output is what each check found."""
+    with tracing.observation(
+        "verify-claims", "evaluator", input=[c.model_dump() for c in claims]
+    ) as span:
+        verified = verify_claims(claims, lookup, config.verification)
+        rate = pass_rate(verified)
+        span.update(
+            output=[v.model_dump() for v in verified],
+            metadata={"citation_pass_rate": rate},
+        )
+    return verified, rate
+
+
+def _record_outcome(root: Any, response: AskResponse, result: LoopResult, passed: int) -> None:
+    """Final trace input/output, summary metadata, and the two scores."""
+    root.update(
+        output=response.answer,  # what a reviewer wants to see at a glance
+        metadata={
+            "model": response.model,
+            "prompt_version": response.prompt_version,
+            "insufficient_data": response.insufficient_data,
+            "claims_total": len(response.claims),
+            "claims_passed": passed,
+            "input_tokens": response.input_tokens,
+            "output_tokens": response.output_tokens,
+            "latency_ms": response.latency_ms,
+            "hit_iteration_limit": result.hit_iteration_limit,
+        },
+    )
+    tracing.score_current_trace("citation_pass_rate", response.citation_pass_rate, "NUMERIC")
+    # Langfuse stores boolean scores as 1 or 0.
+    tracing.score_current_trace("insufficient_data", float(response.insufficient_data), "BOOLEAN")
 
 
 def ask(
@@ -276,17 +340,41 @@ def ask(
     settings: Settings,
     config: AppConfig,
 ) -> AskResponse:
-    """Answer a question, then verify every claim against the database."""
+    """Answer a question, then verify every claim against the database.
+
+    The whole call is one trace. It is tagged with the prompt version, known up front,
+    because tags cannot be added after the first span exists.
+    """
     started = time.perf_counter()
-    result = answer_question(question, client, run, settings, config)
-    verified = verify_claims(result.answer.claims, lookup, config.verification)
-    rate = pass_rate(verified)
-    latency_ms = round((time.perf_counter() - started) * 1000)
-    prompt = load_system_prompt(config.answer.prompt_path)
+    version = prompt_version(load_system_prompt(config.answer.prompt_path))
+    with (
+        tracing.observation("answer-question", "agent", input=question) as root,
+        tracing.trace_attributes(
+            trace_name="answer-question",
+            tags=[f"prompt:{version}"],
+            metadata={"prompt_version": version, "model": settings.model},
+        ),
+    ):
+        result = answer_question(question, client, run, settings, config)
+        verified, rate = _verify_traced(result.answer.claims, lookup, config)
+        latency_ms = round((time.perf_counter() - started) * 1000)
+        response = AskResponse(
+            answer=result.answer.text,
+            insufficient_data=result.answer.insufficient_data,
+            claims=verified,
+            citation_pass_rate=rate,
+            model=settings.model,
+            prompt_version=version,
+            latency_ms=latency_ms,
+            input_tokens=result.usage.input_tokens,
+            output_tokens=result.usage.output_tokens,
+        )
+        _record_outcome(root, response, result, sum(v.passed for v in verified))
     logger.info(
-        "ask: model=%s latency_ms=%d input_tokens=%d output_tokens=%d claims=%d "
+        "ask: model=%s prompt=%s latency_ms=%d input_tokens=%d output_tokens=%d claims=%d "
         "pass_rate=%.2f question=%r",
         settings.model,
+        version,
         latency_ms,
         result.usage.input_tokens,
         result.usage.output_tokens,
@@ -294,14 +382,4 @@ def ask(
         rate,
         question,
     )
-    return AskResponse(
-        answer=result.answer.text,
-        insufficient_data=result.answer.insufficient_data,
-        claims=verified,
-        citation_pass_rate=rate,
-        model=settings.model,
-        prompt_version=prompt_version(prompt),
-        latency_ms=latency_ms,
-        input_tokens=result.usage.input_tokens,
-        output_tokens=result.usage.output_tokens,
-    )
+    return response

@@ -10,7 +10,8 @@ import psycopg
 from pgvector import Vector
 from psycopg.rows import dict_row
 
-from cited_answers.embeddings import embed_texts
+from cited_answers import tracing
+from cited_answers.embeddings import MODEL_NAME, embed_texts
 from cited_answers.models import FigureResult, IndicatorInfo
 from cited_answers.settings import get_app_config
 
@@ -53,6 +54,15 @@ def _fetch_one(conn: psycopg.Connection, sql: str, params: tuple[Any, ...]) -> F
     return _to_figure(row) if row else None
 
 
+def _embed_question(question: str, embed: EmbedFn) -> list[float]:
+    with tracing.observation(
+        "embed-question", "embedding", model=MODEL_NAME, input=question
+    ) as span:
+        vector = embed([question])[0]
+        span.update(output={"dimensions": len(vector)})  # the vector itself is just noise
+    return vector
+
+
 def search_figures(
     conn: psycopg.Connection,
     question: str,
@@ -67,28 +77,54 @@ def search_figures(
     on purpose: vectors from different models are not comparable.
     """
     defaults = get_app_config().retrieval
-    params = {
-        "vec": Vector(embed([question])[0]),
-        "k": k if k is not None else defaults.top_k,
-        "max_distance": max_distance if max_distance is not None else defaults.max_distance,
-    }
-    with conn.cursor(row_factory=dict_row) as cur:
-        rows = cur.execute(_SEARCH, params).fetchall()
-    return [_to_figure(row) for row in rows]
+    k = k if k is not None else defaults.top_k
+    max_distance = max_distance if max_distance is not None else defaults.max_distance
+    trace_input = {"question": question, "k": k, "max_distance": max_distance}
+    with tracing.observation("search-figures", "retriever", input=trace_input) as span:
+        params = {
+            "vec": Vector(_embed_question(question, embed)),
+            "k": k,
+            "max_distance": max_distance,
+        }
+        with conn.cursor(row_factory=dict_row) as cur:
+            rows = cur.execute(_SEARCH, params).fetchall()
+        figures = [_to_figure(row) for row in rows]
+        span.update(
+            output=[
+                {"figure_id": f.figure_id, "value": f.value, "distance": f.distance}
+                for f in figures
+            ],
+            metadata={"result_count": len(figures)},
+        )
+    return figures
 
 
 def list_indicators(conn: psycopg.Connection) -> list[IndicatorInfo]:
     """Every indicator in the database, once each, ordered by code."""
-    with conn.cursor(row_factory=dict_row) as cur:
-        rows = cur.execute(_INDICATORS).fetchall()
-    return [IndicatorInfo.model_validate(row) for row in rows]
+    with tracing.observation("list-indicators", "retriever") as span:
+        with conn.cursor(row_factory=dict_row) as cur:
+            rows = cur.execute(_INDICATORS).fetchall()
+        indicators = [IndicatorInfo.model_validate(row) for row in rows]
+        span.update(output=[i.indicator_code for i in indicators])
+    return indicators
+
+
+def _lookup_output(figure: FigureResult | None) -> dict[str, Any]:
+    """Trace output for an exact lookup. A miss is stated outright: the SDK drops None."""
+    if figure is None:
+        return {"found": False}
+    return {"found": True, "figure_id": figure.figure_id, "value": figure.value}
 
 
 def get_figure(
     conn: psycopg.Connection, country_code: str, indicator_code: str, year: int
 ) -> FigureResult | None:
     """Exact lookup by country, indicator and year."""
-    return _fetch_one(conn, _BY_KEY, (country_code, indicator_code, year))
+    trace_input = {"country_code": country_code, "indicator_code": indicator_code, "year": year}
+    with tracing.observation("get-figure", "retriever", input=trace_input) as span:
+        figure = _fetch_one(conn, _BY_KEY, (country_code, indicator_code, year))
+        span.update(output=_lookup_output(figure))
+    return figure
 
 
 def get_figure_by_id(conn: psycopg.Connection, figure_id: str) -> FigureResult | None:

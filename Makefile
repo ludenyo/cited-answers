@@ -1,4 +1,4 @@
-.PHONY: up down test lint migrate ingest
+.PHONY: up down test lint migrate ingest load-test
 
 up:
 	docker compose up -d
@@ -20,3 +20,8 @@ migrate:
 
 ingest: migrate
 	uv run --env-file .env python -m cited_answers.ingest_worldbank
+
+# Needs the server running: uv run --env-file .env uvicorn cited_answers.api:app
+# Makes about 90 real model calls (a few US cents on Haiku).
+load-test:
+	uv run python scripts/load_test.py

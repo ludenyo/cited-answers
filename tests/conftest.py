@@ -1,5 +1,12 @@
-import json
 import os
+
+# Tracing must stay off in tests. `make test` loads .env, which holds real Langfuse
+# keys, so without this the suite would send test traces to the real project. This runs
+# at import time, before any test or Langfuse client exists. Tests that need tracing
+# build their own client with an in-memory exporter, see tests/test_tracing.py.
+os.environ["LANGFUSE_TRACING_ENABLED"] = "false"
+
+import json
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -9,6 +16,7 @@ import psycopg
 import pytest
 from pgvector import Vector
 
+from cited_answers import tracing
 from cited_answers.db import connect
 from cited_answers.migrate import apply_migrations
 
@@ -75,3 +83,10 @@ def seeded_db(db: psycopg.Connection) -> psycopg.Connection:
             (fig["id"], f"chunk {fig['id']}", Vector(axis_vector(fig["axis"]))),
         )
     return db
+
+
+@pytest.fixture(autouse=True)
+def _tracing_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test starts with a live Langfuse client, and none can leave one behind."""
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
+    monkeypatch.setattr(tracing, "_client", None)
