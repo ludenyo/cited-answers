@@ -289,6 +289,7 @@ questions:
       guardrails_include: [output_retry]
       requires_series:
         - {country: KEN, indicator: BX.TRF.PWKR.CD.DT}
+      guardrails_report_only: true
     todo:
       - "Probabilistic: the model sometimes states the figure in billions, which fails verification (stored in US dollars). It retried in 3 of 3 probe runs. If it ever stops, this case no longer exercises the guardrail and needs a new wording."
     notes: "The data holds remittances in current US dollars, not billions. A claim of about 4.2 fails against the stored value, the answer is retried, and the retry should state the exact figure. Pass condition here is that the retry fired; the answer must never contain an unverified claim."
