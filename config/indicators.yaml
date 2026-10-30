@@ -1,0 +1,26 @@
+countries: [KEN, UGA, TZA]
+start_year: 2000   # fetch start_year through the current year
+
+# The World Bank values API has no unit field. Units come from the parenthesised
+# part of the indicator name; list any indicator without one here.
+units:
+  SP.POP.TOTL: people
+
+indicators:
+  - NY.GDP.MKTP.KD.ZG    # GDP growth (annual %)
+  - NY.GDP.PCAP.CD       # GDP per capita (current US$)
+  - FP.CPI.TOTL.ZG       # Inflation, consumer prices (annual %)
+  - SP.POP.TOTL          # Population, total
+  - SP.URB.TOTL.IN.ZS    # Urban population (% of total)
+  - EG.ELC.ACCS.ZS       # Access to electricity (% of population)
+  - IT.CEL.SETS.P2       # Mobile subscriptions (per 100 people)
+  - IT.NET.USER.ZS       # Internet users (% of population)
+  - SE.PRM.ENRR          # Primary school enrolment (% gross)
+  - SE.SEC.ENRR          # Secondary school enrolment (% gross)
+  - SL.UEM.TOTL.ZS       # Unemployment (% of labour force)
+  - SP.DYN.LE00.IN       # Life expectancy at birth (years)
+  - SH.DYN.MORT          # Under-5 mortality (per 1,000 live births)
+  - NV.AGR.TOTL.ZS       # Agriculture value added (% of GDP)
+  - NE.EXP.GNFS.ZS       # Exports (% of GDP)
+  - BX.TRF.PWKR.CD.DT    # Remittances received (current US$)
+  - AG.LND.FRST.ZS       # Forest area (% of land area)

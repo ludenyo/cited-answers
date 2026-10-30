@@ -5,8 +5,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-cited}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cited}
       POSTGRES_DB: ${POSTGRES_DB:-cited_answers}
+    # Host port 5435, not 5432: a Postgres installed on the host often owns 5432 and
+    # answers before Docker does, and 5433/5434 are used by other local projects.
+    # The container still listens on 5432 internally.
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
