@@ -1,4 +1,4 @@
-.PHONY: up down test lint migrate ingest load-test eval
+.PHONY: up down test lint migrate ingest load-test eval mcp
 
 up:
 	docker compose up -d
@@ -30,3 +30,8 @@ load-test:
 # One run per case, about 30 questions: a few US cents on Haiku. Needs `make up` and `npm ci`.
 eval:
 	set -a; . ./.env; set +a; ./scripts/run_eval.sh
+
+# MCP server over stdio, for MCP clients (see README). Reads DATABASE_URL from .env.
+# Not meant to be run by hand: an MCP client starts it. Use the Inspector to try it.
+mcp:
+	uv run --env-file .env python -m cited_answers.mcp_server

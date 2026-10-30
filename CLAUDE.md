@@ -31,6 +31,7 @@ cited-answers/
 │   ├── settings.py        # env settings + typed config/app.yaml
 │   ├── retrieval.py       # search_figures (pgvector cosine), get_figure, get_figure_by_id, list_indicators
 │   ├── answer.py          # tool loop; the answer comes back via a submit_answer tool
+│   ├── mcp_server.py      # MCP server (stdio): the three data tools, built on answer.run_tool
 │   ├── tracing.py         # Langfuse wrapper: spans, scores, masking; never raises
 │   ├── trace_format.py    # Anthropic messages -> the role format Langfuse renders
 │   └── verify.py          # checks every claim against its cited figure
@@ -62,6 +63,7 @@ make test     # pytest, loading .env so the DB tests run (they skip without TEST
 make lint     # ruff check + ruff format --check
 make migrate  # apply SQL migrations
 make ingest   # migrate, then fetch World Bank data and embed it
+make mcp        # MCP server over stdio (clients start it; see README)
 make eval       # promptfoo suite, 1 run per case, against the fixture database (cited_answers_eval)
 make load-test  # 30 eval questions x 5 against a running server (150 requests; refused ones make no answering call)
 ```
