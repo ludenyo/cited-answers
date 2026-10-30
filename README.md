@@ -78,11 +78,15 @@ builds its tests from it. Each case runs once through `answer.ask()` directly (n
 must pass: every claim re-verified by `verify.py`, `insufficient_data`, `refused` and
 `guardrails_include`, the latest-year check, latency under 20 s and, for non-refused cases, an
 `llm-rubric`. `scripts/eval_gate.py` makes the deterministic ones hard gates (claims, flag,
-latest year, refusal and guardrails) that must pass in every run of every case. The rubric and
-latency are report-only. `EVAL_REPEAT=3 make eval` runs each case three times.
+latest year, refusal and guardrails) that must pass in every run of every case. The rubric,
+latency and, for cases marked `guardrails_report_only` (a retry that fires only sometimes), the
+guardrails that must fire are report-only. `EVAL_REPEAT=3 make eval` runs each case three times.
+The workflow runs on pull requests and on pushes to `main` that touch `src/`, `prompts/`,
+`config/` or `evals/`, and can be started by hand (`workflow_dispatch`).
 
 - **Fixture database.** CI never calls the World Bank API. It loads
   `tests/fixtures/eval_figures.sql`: the full series (all years) for every figure the cases expect,
+  plus any series a case lists under `requires_series`,
   with stored embeddings. Regenerate with `scripts/export_eval_fixture.py` against a fully
   ingested DB whenever the cases change. Fewer distractors than production, so retrieval is
   easier than the real thing. `make eval` uses a separate `<db>_eval` database, never your data.
