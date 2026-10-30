@@ -4,6 +4,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# shellcheck source=scripts/eval_env.sh
+source scripts/eval_env.sh
+clean_env ANTHROPIC_API_KEY ANTHROPIC_MODEL
+require_env ANTHROPIC_API_KEY ANTHROPIC_MODEL
+
 export LANGFUSE_TRACING_ENABLED=false
 # Keeps promptfoo's own cache and database inside the project instead of in ~/.promptfoo.
 export PROMPTFOO_CONFIG_DIR="$PWD/.promptfoo"
