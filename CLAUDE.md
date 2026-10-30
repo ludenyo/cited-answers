@@ -39,7 +39,7 @@ cited-answers/
 ├── config/indicators.yaml # ingestion: countries, indicators, start year, unit overrides
 ├── config/app.yaml        # retrieval, llm loop, verification tolerances, prompt file
 ├── scripts/load_test.py   # sends every eval question 5 times to a running /ask
-├── evals/questions_draft.yaml  # 18 draft eval questions (easy, compare, vague, trap), not yet run
+├── evals/questions_draft.yaml  # 30 draft eval questions (easy, compare, vague, latest, trap, guardrail), not yet run
 ├── tests/                 # pytest suite, mirrors the package
 ├── docker-compose.yml     # Postgres + pgvector
 ├── .env.example           # required env vars; copy to .env (gitignored)
@@ -56,7 +56,7 @@ make test     # pytest, loading .env so the DB tests run (they skip without TEST
 make lint     # ruff check + ruff format --check
 make migrate  # apply SQL migrations
 make ingest   # migrate, then fetch World Bank data and embed it
-make load-test  # 18 eval questions x 5 against a running server (about 90 real model calls)
+make load-test  # 30 eval questions x 5 against a running server (150 requests; refused ones make no answering call)
 ```
 
 ## Database port

@@ -9,7 +9,7 @@ the answers against the eval file, and save results so two runs can be compared.
     uv run python scripts/load_test.py --compare evals/results/a.txt evals/results/b.json
     uv run python scripts/load_test.py --repeats 1 --only easy-01 trap-02
 
-This makes real model calls. 20 questions x 5 repeats is 100 requests, roughly 5 to 15
+This makes real model calls. 30 questions x 5 repeats is 150 requests, roughly 5 to 15
 minutes depending on concurrency and a few US cents on Haiku.
 
 Two checks run on every answer. The insufficient_data flag must match the eval file. For
@@ -49,6 +49,8 @@ class Question:
     text: str
     expect_insufficient: bool
     latest_checks: tuple[Pair, ...] = ()
+    expect_refused: bool = False
+    guardrails_include: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,8 @@ class Result:
     prompt_version: str | None = None
     figure_ids: tuple[str, ...] = ()
     latest_ok: bool | None = None  # None: no check for this question, or it was skipped
+    refused: bool = False
+    guardrails: tuple[str, ...] = ()
 
     @property
     def as_expected(self) -> bool | None:
@@ -77,6 +81,19 @@ class Result:
         if self.insufficient_data is None:
             return None
         return self.insufficient_data == self.job.question.expect_insufficient
+
+    @property
+    def guardrails_ok(self) -> bool | None:
+        """Refused only when the eval file says so, and every expected guardrail fired.
+
+        None when there was no answer.
+        """
+        question = self.job.question
+        if not self.ok:
+            return None
+        return self.refused == question.expect_refused and set(question.guardrails_include) <= set(
+            self.guardrails
+        )
 
 
 # ---- questions and jobs ----------------------------------------------------------------
@@ -92,6 +109,8 @@ def _question_from_yaml(raw: dict[str, Any]) -> Question:
         raw["question"],
         bool(raw["expect"]["insufficient_data"]),
         checks,
+        bool(raw["expect"].get("refused", False)),
+        tuple(raw["expect"].get("guardrails_include", [])),
     )
 
 
@@ -189,6 +208,8 @@ def run_job(client: httpx2.Client, job: Job) -> Result:
             output_tokens=int(body["output_tokens"]),
             prompt_version=str(body["prompt_version"]),
             figure_ids=_figure_ids(body),
+            refused=bool(body.get("refused", False)),
+            guardrails=tuple(body.get("guardrails", [])),
         )
     except Exception as exc:  # noqa: BLE001 - a bad response must not stop the whole run
         return Result(job, False, time.perf_counter() - started, error=type(exc).__name__)
@@ -213,6 +234,8 @@ def progress_line(done: int, total: int, result: Result) -> str:
     )
     if result.latest_ok is not None:
         line += "  latest_year=" + ("ok" if result.latest_ok else "STALE")
+    if result.guardrails_ok is False:
+        line += "  GUARDRAILS DIFFER"
     return line
 
 
@@ -237,6 +260,9 @@ def result_to_dict(result: Result) -> dict[str, Any]:
         "prompt_version": result.prompt_version,
         "figure_ids": list(result.figure_ids),
         "latest_ok": result.latest_ok,
+        "refused": result.refused,
+        "guardrails": list(result.guardrails),
+        "guardrails_ok": result.guardrails_ok,
     }
 
 
@@ -308,6 +334,8 @@ def summarize(questions: list[Question], results: list[Result]) -> str:
         f"mean citation_pass_rate: {_mean([r.pass_rate or 0.0 for r in ok]):.3f}",
         f"insufficient_data matched the eval file: {matched}/{len(ok)}",
         f"latest-year check passed: {_latest_cell(ok)}",
+        f"refusals and guardrails matched the eval file: "
+        f"{sum(bool(r.guardrails_ok) for r in ok)}/{len(ok)}",
         f"tokens: {sum(r.input_tokens for r in ok)} in, {sum(r.output_tokens for r in ok)} out",
         f"prompt versions seen: {', '.join(versions) or 'none'}",
     ]
