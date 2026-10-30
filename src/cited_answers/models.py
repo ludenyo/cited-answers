@@ -21,9 +21,6 @@ class FigureResult(BaseModel):
     unit: str | None
     source_url: str
     distance: float | None = None  # cosine distance, only set by search_figures
-    # Newest year in the database for this country and indicator. Lets the model say
-    # "latest" correctly instead of assuming a year.
-    latest_year: int | None = None
 
 
 class IndicatorInfo(BaseModel):
