@@ -48,7 +48,7 @@ def _question(qid: str = "q1", expect_insufficient: bool = False) -> object:
 
 def test_loads_all_eval_questions_with_their_expectations() -> None:
     questions = lt.load_questions(lt.DEFAULT_QUESTIONS)
-    assert len(questions) == 20
+    assert len(questions) == 30
     by_id = {q.id: q for q in questions}
     assert by_id["easy-01"].expect_insufficient is False
     assert by_id["trap-01"].expect_insufficient is True
@@ -65,15 +65,15 @@ def test_only_filters_and_unknown_ids_are_rejected() -> None:
         lt.load_questions(lt.DEFAULT_QUESTIONS, ["easy-01", "nope"])
 
 
-def test_default_run_is_100_requests_each_question_5_times_in_rounds() -> None:
+def test_default_run_is_150_requests_each_question_5_times_in_rounds() -> None:
     questions = lt.load_questions(lt.DEFAULT_QUESTIONS)
     jobs = lt.build_jobs(questions, 5)
 
-    assert len(jobs) == 100
+    assert len(jobs) == 150
     assert all(sum(j.question.id == q.id for j in jobs) == 5 for q in questions)
-    first_round = jobs[:20]
-    assert [j.run for j in first_round] == [1] * 20  # every question runs once first
-    assert [j.run for j in jobs[20:40]] == [2] * 20
+    first_round = jobs[:30]
+    assert [j.run for j in first_round] == [1] * 30  # every question runs once first
+    assert [j.run for j in jobs[30:60]] == [2] * 30
 
 
 # ---- one request -------------------------------------------------------------------------
@@ -545,3 +545,39 @@ def test_cells_stay_apart_even_for_three_digit_counts() -> None:
     text = lt.compare_runs([("a", _run(big, ["p1"])), ("b", _run(big, ["p2"]))])
     total = next(line for line in text.splitlines() if line.startswith("ALL"))
     assert re.search(r"100/100\s+100/100", total)  # separated, never run together
+
+
+# ---- guardrail expectations ------------------------------------------------------------
+
+
+def test_guardrail_questions_load_their_refusal_and_guardrail_expectations() -> None:
+    by_id = {q.id: q for q in lt.load_questions(lt.DEFAULT_QUESTIONS)}
+    assert by_id["guardrail-scope-01"].expect_refused is True
+    assert by_id["guardrail-injection-01"].guardrails_include == ("input_suspicious",)
+    assert by_id["guardrail-output-01"].expect_refused is False
+    assert by_id["easy-01"].expect_refused is False and by_id["easy-01"].guardrails_include == ()
+
+
+def _guarded(refused: bool, guardrails: list[str], expect_refused: bool) -> lt.Result:
+    question = lt.Question("g1", "guardrail", "q?", True, (), expect_refused, ("input_suspicious",))
+    body = {**_body(insufficient=True), "refused": refused, "guardrails": guardrails}
+    client = _client(lambda request: httpx2.Response(200, content=json.dumps(body)))
+    return lt.run_job(client, lt.Job(question, 1))
+
+
+def test_a_refusal_with_the_expected_guardrail_matches() -> None:
+    assert _guarded(True, ["input_suspicious"], True).guardrails_ok is True
+
+
+def test_a_missing_guardrail_or_an_unexpected_refusal_is_flagged() -> None:
+    assert _guarded(True, ["input_out_of_scope"], True).guardrails_ok is False
+    assert _guarded(True, ["input_suspicious"], False).guardrails_ok is False
+    assert _guarded(False, ["input_suspicious"], True).guardrails_ok is False
+
+
+def test_an_ordinary_question_that_is_refused_is_flagged() -> None:
+    result = lt.run_job(
+        _client(lambda r: httpx2.Response(200, content=json.dumps({**_body(), "refused": True}))),
+        lt.Job(lt.Question("e1", "easy", "q?", False), 1),
+    )
+    assert result.guardrails_ok is False

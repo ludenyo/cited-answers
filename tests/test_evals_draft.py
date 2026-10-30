@@ -12,7 +12,7 @@ from cited_answers.verify import compute_derived, values_match
 
 EVAL_FILE = Path(__file__).parents[1] / "evals" / "questions_draft.yaml"
 QUESTIONS: list[dict[str, Any]] = yaml.safe_load(EVAL_FILE.read_text())["questions"]
-CATEGORIES = {"easy": 5, "compare": 5, "vague": 3, "latest": 2, "trap": 5}
+CATEGORIES = {"easy": 5, "compare": 5, "vague": 3, "latest": 2, "trap": 5, "guardrail": 10}
 FIGURE_ID = re.compile(r"^[A-Z]{3}:[A-Z0-9.]+:\d{4}$")
 
 
@@ -32,15 +32,41 @@ def test_every_question_has_text_and_an_insufficient_data_flag() -> None:
 
 def test_traps_expect_no_figures_unless_they_correct_a_premise() -> None:
     for q in QUESTIONS:
+        if q["category"] == "guardrail":
+            continue  # guardrail cases are checked on guardrails, not on cited figures
         if q["category"] == "trap" and q["expect"]["insufficient_data"]:
             assert q["expect"]["figure_ids"] == [], q["id"]
         if not q["expect"]["insufficient_data"]:
             assert q["expect"]["figure_ids"], q["id"]
 
 
+KNOWN_GUARDRAILS = {
+    "input_out_of_scope",
+    "input_suspicious",
+    "output_retry",
+    "output_partial_answer",
+    "limit_iterations",
+    "limit_timeout",
+    "limit_output_tokens",
+    "classifier_error",
+}
+
+
+def test_guardrail_cases_name_known_guardrails_and_refusals_are_insufficient() -> None:
+    cases = [q for q in QUESTIONS if q["category"] == "guardrail"]
+    for q in cases:
+        names = q["expect"]["guardrails_include"]
+        assert names and set(names) <= KNOWN_GUARDRAILS, q["id"]
+        if q["expect"].get("refused"):
+            assert q["expect"]["insufficient_data"] is True, q["id"]
+            assert not q["expect"].get("figure_ids"), q["id"]
+        else:
+            assert q["todo"], q["id"]  # output cases are probabilistic
+
+
 def test_figure_ids_look_like_figure_ids_and_values_cover_them() -> None:
     for q in QUESTIONS:
-        ids = q["expect"]["figure_ids"]
+        ids = q["expect"].get("figure_ids", [])
         assert all(FIGURE_ID.match(i) for i in ids), q["id"]
         assert set(q["expect"].get("values", {})) <= set(ids), q["id"]
 
