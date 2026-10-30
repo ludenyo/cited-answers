@@ -158,14 +158,7 @@ def run_tool(
             conn, tool_input["country_code"], tool_input["indicator_code"], tool_input["year"]
         )
         if figure is None:
-            miss: dict[str, Any] = {"figure": None, "message": "No figure for that combination."}
-            # Tell the model how far this series goes, so it need not guess another year.
-            latest = retrieval.get_latest_year(
-                conn, tool_input["country_code"], tool_input["indicator_code"]
-            )
-            if latest is not None:
-                miss["latest_year"] = latest
-            return json.dumps(miss)
+            return json.dumps({"figure": None, "message": "No figure for that combination."})
         return json.dumps({"figure": _figure_json(figure)})
     if name == "list_indicators":
         indicators = retrieval.list_indicators(conn)
