@@ -65,17 +65,45 @@ def _response(
 
 
 class FakeClient:
-    """Stands in for anthropic.Anthropic: replays scripted responses, never hits the network."""
+    """Stands in for anthropic.Anthropic: replays scripted responses, never hits the network.
 
-    def __init__(self, *responses: SimpleNamespace) -> None:
+    Calls from the input classifier (recognised by their label_question tool) are answered
+    separately and do not use up the scripted responses, so a script describes only the
+    answering conversation. `label` is what the classifier says: a label name, None for "no
+    usable answer", or an exception to raise.
+    """
+
+    def __init__(
+        self,
+        *responses: SimpleNamespace | Exception,
+        label: str | Exception | None = "in_scope",
+        classifier_tokens: tuple[int, int] = (0, 0),
+    ) -> None:
         self._responses = list(responses)
-        self.requests: list[dict[str, Any]] = []
+        self.requests: list[dict[str, Any]] = []  # answering calls only
+        self.classifier_requests: list[dict[str, Any]] = []
+        self._label = label
+        self._classifier_tokens = classifier_tokens
         self.messages = self
+
+    def _classify(self, kwargs: dict[str, Any]) -> SimpleNamespace:
+        self.classifier_requests.append(kwargs)
+        if isinstance(self._label, Exception):
+            raise self._label
+        if self._label is None:
+            return _response(SimpleNamespace(type="text", text="no label"), stop="end_turn")
+        call = _tool_use("c1", "label_question", {"label": self._label, "reason": "test"})
+        return _response(call, tokens=self._classifier_tokens)
 
     def create(self, **kwargs: Any) -> SimpleNamespace:
         kwargs["messages"] = [dict(m) for m in kwargs["messages"]]  # snapshot before mutation
+        if any(t["name"] == "label_question" for t in kwargs.get("tools", [])):
+            return self._classify(kwargs)
         self.requests.append(kwargs)
-        return self._responses.pop(0)
+        item = self._responses.pop(0)
+        if isinstance(item, Exception):  # a scripted failure, e.g. a timeout
+            raise item
+        return item
 
 
 def _runner(result: str = "{}") -> Any:
@@ -203,20 +231,21 @@ def test_tokens_are_summed_over_every_model_call() -> None:
 
 
 def test_ask_verifies_claims_and_fills_every_response_field() -> None:
-    wrong = {**GOOD_ANSWER["claims"][0], "statement": "x", "value": 9.9}
-    submitted = {**GOOD_ANSWER, "claims": [*GOOD_ANSWER["claims"], wrong]}
-    client = FakeClient(_response(_tool_use("t1", "submit_answer", submitted), tokens=(120, 30)))
+    client = FakeClient(_response(_tool_use("t1", "submit_answer", GOOD_ANSWER), tokens=(120, 30)))
 
     response = ask("q", client, _runner(), lambda _id: FIGURE, SETTINGS, CONFIG)  # type: ignore[arg-type]
 
-    assert [c.passed for c in response.claims] == [True, False]
-    assert response.citation_pass_rate == 0.5
+    assert [c.passed for c in response.claims] == [True]
+    assert response.citation_pass_rate == 1.0
     assert response.claims[0].source_url == FIGURE.source_url
     assert response.model == "test-model"
     assert response.prompt_version == hashlib.sha256(PROMPT.read_bytes()).hexdigest()[:8]
     assert len(response.prompt_version) == 8
     assert isinstance(response.latency_ms, int) and response.latency_ms >= 0
     assert (response.input_tokens, response.output_tokens) == (120, 30)
+    assert response.refused is False and response.refusal_reason is None
+    assert response.partial_answer is False and response.partial_answer_explanation is None
+    assert response.guardrails == []  # nothing fired
 
 
 def test_ask_logs_latency_and_tokens_but_no_secrets(caplog: pytest.LogCaptureFixture) -> None:

@@ -1,19 +1,15 @@
 import json
 import logging
 import time
-import uuid
-from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from langfuse import Langfuse
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from cited_answers import tracing
 from cited_answers.answer import ask, prompt_version, run_tool
 from cited_answers.embeddings import MODEL_NAME
-from tests.conftest import axis_vector
+from tests.conftest import Captured, axis_vector
 from tests.test_answer import (
     CONFIG,
     FIGURE,
@@ -26,7 +22,7 @@ from tests.test_answer import (
     _tool_use,
 )
 
-# ---- on / off -------------------------------------------------------------------
+# ---- on / off ------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -121,7 +117,7 @@ def test_shutdown_flushes_once_and_swallows_errors(monkeypatch: pytest.MonkeyPat
     assert tracing._client is None
 
 
-# ---- tracing must never break a request -------------------------------------------
+# ---- tracing must never break a request ----------------------------------------------
 
 
 class _Manager:
@@ -209,7 +205,7 @@ def test_trace_attributes_failure_is_swallowed(monkeypatch: pytest.MonkeyPatch) 
     assert ran
 
 
-# ---- masking ----------------------------------------------------------------------
+# ---- masking -------------------------------------------------------------------------
 
 
 def test_mask_redacts_keys_and_emails_anywhere_in_the_data() -> None:
@@ -232,43 +228,6 @@ def test_mask_leaves_ordinary_data_alone() -> None:
 
 
 # ---- the real SDK, with an in-memory exporter ------------------------------------------
-
-
-class Captured:
-    def __init__(self, exporter: InMemorySpanExporter, client: Langfuse) -> None:
-        self._exporter, self._client = exporter, client
-        self.scores: list[dict[str, Any]] = []
-
-    def spans(self) -> list[Any]:
-        self._client.flush()
-        return list(self._exporter.get_finished_spans())
-
-    def by_name(self, name: str) -> list[Any]:
-        return [s for s in self.spans() if s.name == name]
-
-    def parent_name(self, span: Any) -> str | None:
-        by_id = {s.context.span_id: s.name for s in self.spans()}
-        return by_id.get(span.parent.span_id) if span.parent else None
-
-
-@pytest.fixture
-def captured(monkeypatch: pytest.MonkeyPatch) -> Iterator[Captured]:
-    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "true")
-    exporter = InMemorySpanExporter()
-    client = tracing.create_client(  # the production client, plus an in-memory exporter
-        public_key=f"pk-lf-test-{uuid.uuid4().hex[:8]}",
-        secret_key="sk-lf-test",
-        base_url="http://127.0.0.1:9",  # nothing listens here: no test can reach a real server
-        span_exporter=exporter,
-        flush_at=1,
-    )
-    monkeypatch.setattr(tracing, "_client", client)
-    record = Captured(exporter, client)
-    monkeypatch.setattr(
-        client, "score_current_trace", lambda **kw: record.scores.append(kw), raising=False
-    )
-    yield record
-    client.shutdown()
 
 
 def _scripted_run() -> Any:
@@ -295,6 +254,7 @@ def test_one_ask_is_one_trace_with_the_expected_spans(captured: Captured) -> Non
         "answer-question",
         "call-model",
         "call-model",
+        "classify-question",
         "verify-claims",
     ]
     assert len({s.context.trace_id for s in spans}) == 1  # a single trace
@@ -309,6 +269,7 @@ def test_observation_types(captured: Captured) -> None:
     assert types == {
         "answer-question": "agent",
         "call-model": "generation",
+        "classify-question": "generation",
         "verify-claims": "evaluator",
     }
 
@@ -386,7 +347,11 @@ def test_scores_reflect_failed_checks_and_insufficient_data(captured: Captured) 
         "claims": [{**GOOD_ANSWER["claims"][0], "value": 99.0}],
         "insufficient_data": True,
     }
-    client = FakeClient(_response(_tool_use("t1", "submit_answer", wrong)))
+    # The same wrong claim is submitted twice: once, and again after the retry.
+    client = FakeClient(
+        _response(_tool_use("t1", "submit_answer", wrong)),
+        _response(_tool_use("t2", "submit_answer", wrong)),
+    )
 
     ask("q", client, _runner(), lambda _id: FIGURE, SETTINGS, CONFIG)  # type: ignore[arg-type]
 
@@ -419,7 +384,9 @@ def test_a_failed_model_call_is_an_error_on_the_generation(captured: Captured) -
         def __init__(self) -> None:
             self.messages = self
 
-        def create(self, **_kwargs: Any) -> None:
+        def create(self, **kwargs: Any) -> Any:
+            if any(t["name"] == "label_question" for t in kwargs["tools"]):
+                return FakeClient()._classify(kwargs)  # the classifier works; the answer call fails
             raise ConnectionError("anthropic unreachable")
 
     with pytest.raises(ConnectionError):
@@ -474,7 +441,7 @@ def test_api_key_never_reaches_a_span(captured: Captured) -> None:
     assert "ceo@example.com" not in everything
 
 
-# ---- retrieval spans (need the database) ----------------------------------------------
+# ---- retrieval spans (need the database) ---------------------------------------------
 
 
 def test_search_records_a_retriever_with_a_nested_embedding(
@@ -524,7 +491,7 @@ def test_get_figure_and_list_indicators_record_retriever_spans(
     assert all(s.attributes["langfuse.observation.type"] == "retriever" for s in captured.spans())
 
 
-# ---- Langfuse really unreachable ---------------------------------------------------------
+# ---- Langfuse really unreachable -----------------------------------------------------
 
 
 def test_an_unreachable_langfuse_does_not_slow_or_break_a_request(
@@ -571,3 +538,43 @@ def test_export_filter_drops_only_the_anthropic_sdk_scope() -> None:
 
     assert tracing.should_export_span(span("com.anthropic.sdk.python")) is False
     assert tracing.should_export_span(span("com.anthropic.anything")) is False
+
+
+# ---- events --------------------------------------------------------------------------
+
+
+def test_an_event_inside_a_span_is_recorded_under_it(captured: Captured) -> None:
+    with tracing.observation("answer-question", "agent"):
+        tracing.event(
+            "guardrail-triggered", level="WARNING", metadata={"guardrail": "output_retry"}
+        )
+
+    [event] = captured.by_name("guardrail-triggered")
+    assert event.attributes["langfuse.observation.type"] == "event"
+    assert event.attributes["langfuse.observation.level"] == "WARNING"
+    assert event.attributes["langfuse.observation.metadata.guardrail"] == '"output_retry"'
+    assert captured.parent_name(event) == "answer-question"
+
+
+def test_an_event_with_no_surrounding_span_becomes_its_own_trace(captured: Captured) -> None:
+    tracing.event("guardrail-triggered", level="WARNING", metadata={"guardrail": "rate_limited"})
+    [event] = captured.by_name("guardrail-triggered")
+    assert event.parent is None
+
+
+def test_events_are_a_no_op_when_tracing_is_off() -> None:
+    assert tracing._client is None
+    tracing.event("guardrail-triggered", level="WARNING")  # nothing to assert but no error
+
+
+def test_an_event_failure_never_reaches_the_caller(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    class Broken:
+        def create_event(self, **_kw: Any) -> None:
+            raise RuntimeError("langfuse is down")
+
+    monkeypatch.setattr(tracing, "_client", Broken())
+    with caplog.at_level(logging.WARNING, logger="cited_answers.tracing"):
+        tracing.event("guardrail-triggered", level="WARNING")
+    assert "could not record event" in caplog.text

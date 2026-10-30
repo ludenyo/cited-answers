@@ -14,6 +14,8 @@ from typing import Any
 
 import psycopg
 import pytest
+from langfuse import Langfuse
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pgvector import Vector
 
 from cited_answers import tracing
@@ -90,3 +92,40 @@ def _tracing_off(monkeypatch: pytest.MonkeyPatch) -> None:
     """No test starts with a live Langfuse client, and none can leave one behind."""
     monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
     monkeypatch.setattr(tracing, "_client", None)
+
+
+class Captured:
+    def __init__(self, exporter: InMemorySpanExporter, client: Langfuse) -> None:
+        self._exporter, self._client = exporter, client
+        self.scores: list[dict[str, Any]] = []
+
+    def spans(self) -> list[Any]:
+        self._client.flush()
+        return list(self._exporter.get_finished_spans())
+
+    def by_name(self, name: str) -> list[Any]:
+        return [s for s in self.spans() if s.name == name]
+
+    def parent_name(self, span: Any) -> str | None:
+        by_id = {s.context.span_id: s.name for s in self.spans()}
+        return by_id.get(span.parent.span_id) if span.parent else None
+
+
+@pytest.fixture
+def captured(monkeypatch: pytest.MonkeyPatch) -> Iterator[Captured]:
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "true")
+    exporter = InMemorySpanExporter()
+    client = tracing.create_client(  # the production client, plus an in-memory exporter
+        public_key=f"pk-lf-test-{uuid.uuid4().hex[:8]}",
+        secret_key="sk-lf-test",
+        base_url="http://127.0.0.1:9",  # nothing listens here: no test can reach a real server
+        span_exporter=exporter,
+        flush_at=1,
+    )
+    monkeypatch.setattr(tracing, "_client", client)
+    record = Captured(exporter, client)
+    monkeypatch.setattr(
+        client, "score_current_trace", lambda **kw: record.scores.append(kw), raising=False
+    )
+    yield record
+    client.shutdown()
