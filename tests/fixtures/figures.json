@@ -1,0 +1,42 @@
+[
+  {
+    "id": "KEN:NY.GDP.MKTP.KD.ZG:2023",
+    "country_code": "KEN", "country_name": "Kenya",
+    "indicator_code": "NY.GDP.MKTP.KD.ZG", "indicator_name": "GDP growth (annual %)",
+    "year": 2023, "value": 5.72, "unit": "annual %",
+    "source_url": "https://api.worldbank.org/v2/country/KEN/indicator/NY.GDP.MKTP.KD.ZG?format=json&date=2023",
+    "axis": 0
+  },
+  {
+    "id": "KEN:NY.GDP.MKTP.KD.ZG:2022",
+    "country_code": "KEN", "country_name": "Kenya",
+    "indicator_code": "NY.GDP.MKTP.KD.ZG", "indicator_name": "GDP growth (annual %)",
+    "year": 2022, "value": 4.88, "unit": "annual %",
+    "source_url": "https://api.worldbank.org/v2/country/KEN/indicator/NY.GDP.MKTP.KD.ZG?format=json&date=2022",
+    "axis": 1
+  },
+  {
+    "id": "KEN:SP.POP.TOTL:2023",
+    "country_code": "KEN", "country_name": "Kenya",
+    "indicator_code": "SP.POP.TOTL", "indicator_name": "Population, total",
+    "year": 2023, "value": 55339003, "unit": "people",
+    "source_url": "https://api.worldbank.org/v2/country/KEN/indicator/SP.POP.TOTL?format=json&date=2023",
+    "axis": 2
+  },
+  {
+    "id": "UGA:SP.DYN.LE00.IN:2023",
+    "country_code": "UGA", "country_name": "Uganda",
+    "indicator_code": "SP.DYN.LE00.IN", "indicator_name": "Life expectancy at birth, total (years)",
+    "year": 2023, "value": 68.6, "unit": "years",
+    "source_url": "https://api.worldbank.org/v2/country/UGA/indicator/SP.DYN.LE00.IN?format=json&date=2023",
+    "axis": 3
+  },
+  {
+    "id": "TZA:FP.CPI.TOTL.ZG:2023",
+    "country_code": "TZA", "country_name": "Tanzania",
+    "indicator_code": "FP.CPI.TOTL.ZG", "indicator_name": "Inflation, consumer prices (annual %)",
+    "year": 2023, "value": 3.8, "unit": "annual %",
+    "source_url": "https://api.worldbank.org/v2/country/TZA/indicator/FP.CPI.TOTL.ZG?format=json&date=2023",
+    "axis": 4
+  }
+]

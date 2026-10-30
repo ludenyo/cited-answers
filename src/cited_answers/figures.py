@@ -4,9 +4,12 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal
 
-# Matches the last parenthesised group at the end of an indicator name,
-# e.g. "GDP growth (annual %)" -> "annual %".
-_UNIT_PATTERN = re.compile(r"\(([^()]*)\)\s*$")
+# Every parenthesised group in an indicator name, e.g. "GDP growth (annual %)".
+_GROUP_PATTERN = re.compile(r"\(([^()]*)\)")
+# Names can end with a source qualifier after the unit, e.g.
+# "Unemployment, total (% of total labor force) (modeled ILO estimate)".
+# A group counts as a unit only if it contains one of these markers.
+_UNIT_HINTS = ("%", "per ", "us$", "years", "current", "constant")
 
 
 @dataclass(frozen=True)
@@ -28,11 +31,18 @@ def make_figure_id(country_code: str, indicator_code: str, year: int) -> str:
 
 
 def derive_unit(indicator_code: str, indicator_name: str, overrides: dict[str, str]) -> str:
-    """Explicit override first, then the parenthesised part of the name, else empty."""
+    """Explicit override first, then the last unit-like bracketed group of the name.
+
+    Falls back to the last bracketed group when none looks like a unit, and to
+    an empty string when the name has no brackets at all.
+    """
     if indicator_code in overrides:
         return overrides[indicator_code]
-    match = _UNIT_PATTERN.search(indicator_name)
-    return match.group(1) if match else ""
+    groups = _GROUP_PATTERN.findall(indicator_name)
+    for group in reversed(groups):
+        if any(hint in group.lower() for hint in _UNIT_HINTS):
+            return group
+    return groups[-1] if groups else ""
 
 
 def format_value(value: Decimal) -> str:

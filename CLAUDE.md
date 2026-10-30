@@ -26,7 +26,13 @@ cited-answers/
 │   ├── figures.py         # Figure record, id, unit and sentence helpers
 │   ├── worldbank.py       # World Bank API v2 client and record parsing
 │   ├── embeddings.py      # bge-small-en-v1.5 batch embedding (384 dims)
-│   └── ingest_worldbank.py  # fetch, upsert and embed (idempotent)
+│   ├── ingest_worldbank.py  # fetch, upsert and embed (idempotent)
+│   ├── models.py          # Claim, Answer, VerifiedClaim, AskResponse, FigureResult
+│   ├── settings.py        # ANTHROPIC_MODEL / ANTHROPIC_MAX_TOKENS from env
+│   ├── retrieval.py       # search_figures (pgvector cosine), get_figure, get_figure_by_id
+│   ├── answer.py          # tool loop; the answer comes back via a submit_answer tool
+│   └── verify.py          # checks every claim against its cited figure
+├── prompts/answer_system.md  # system prompt, versioned on its own
 ├── migrations/            # numbered SQL files
 ├── config/indicators.yaml # countries, indicators, start year, unit overrides
 ├── tests/                 # pytest suite, mirrors the package

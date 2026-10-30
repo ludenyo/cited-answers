@@ -1,0 +1,5 @@
+# Only the verification section exists so far. The retrieval, llm and answer
+# sections from the original spec are not wired up yet, so they are not listed here.
+verification:
+  abs_tolerance: 0.05      # for small values like percentages
+  rel_tolerance: 0.005     # 0.5%, for large values like population

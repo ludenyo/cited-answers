@@ -1,0 +1,153 @@
+# DRAFT eval questions for cited-answers. Not yet run against the system.
+#
+# Expected values were read from the local database after the 2026-10-30 ingest,
+# so they need re-checking if the data is re-ingested. A claim passes verification
+# when its value is within max(abs_tolerance, rel_tolerance * |stored value|) of the
+# stored value. The tolerances live in config/app.yaml: currently 0.05 absolute and
+# 0.5% relative, so about 0.05 for percentages and about 277,000 for Kenya's population.
+#
+# Fields:
+#   id, category        - easy | compare | trap
+#   question            - exactly what is sent to POST /ask
+#   expect.insufficient_data - what the Answer flag should be
+#   expect.figure_ids   - figures a correct answer should cite
+#   expect.values       - the numbers it should state (rounded as shown)
+#   notes               - what a good answer does, and what would count as a failure
+
+questions:
+  # ---- Easy: one figure, exact lookup -------------------------------------
+  - id: easy-01
+    category: easy
+    question: "What was Kenya's GDP growth in 2023?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:NY.GDP.MKTP.KD.ZG:2023"]
+      values: {"KEN:NY.GDP.MKTP.KD.ZG:2023": 5.72}
+    notes: "About 5.7% annual growth."
+
+  - id: easy-02
+    category: easy
+    question: "What was Kenya's total population in 2023?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:SP.POP.TOTL:2023"]
+      values: {"KEN:SP.POP.TOTL:2023": 55339003}
+    notes: "Large value, so the relative tolerance applies: a claim within about 277,000 of 55339003 passes, for example 55300000. A claim value of 55.3 (rescaled to millions) still fails, because the claim value must be in the figure's own units."
+
+  - id: easy-03
+    category: easy
+    question: "What was life expectancy at birth in Uganda in 2022?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["UGA:SP.DYN.LE00.IN:2022"]
+      values: {"UGA:SP.DYN.LE00.IN:2022": 67.68}
+    notes: "Semantic search ranks years loosely, so the model must pick the 2022 figure, not another year."
+
+  - id: easy-04
+    category: easy
+    question: "What share of Tanzania's population had access to electricity in 2022?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["TZA:EG.ELC.ACCS.ZS:2022"]
+      values: {"TZA:EG.ELC.ACCS.ZS:2022": 45.8}
+    notes: "About 45.8% of the population."
+
+  - id: easy-05
+    category: easy
+    question: "What was the unemployment rate in Kenya in 2023?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:SL.UEM.TOTL.ZS:2023"]
+      values: {"KEN:SL.UEM.TOTL.ZS:2023": 5.41}
+    notes: "About 5.4% of the labour force."
+
+  # ---- Compare: several figures, years or countries ------------------------
+  - id: compare-01
+    category: compare
+    question: "Did Kenya's inflation rate rise or fall between 2021 and 2023, and by how many percentage points?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:FP.CPI.TOTL.ZG:2021", "KEN:FP.CPI.TOTL.ZG:2023"]
+      values: {"KEN:FP.CPI.TOTL.ZG:2021": 6.11, "KEN:FP.CPI.TOTL.ZG:2023": 7.67}
+    notes: "Rose, from about 6.1% to 7.7%, roughly 1.6 points. Both source figures must be claims and the subtraction shown."
+
+  - id: compare-02
+    category: compare
+    question: "Which of Kenya, Uganda and Tanzania had the highest GDP per capita in 2023?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:NY.GDP.PCAP.CD:2023", "UGA:NY.GDP.PCAP.CD:2023", "TZA:NY.GDP.PCAP.CD:2023"]
+      values:
+        "KEN:NY.GDP.PCAP.CD:2023": 1942.59
+        "UGA:NY.GDP.PCAP.CD:2023": 1002.31
+        "TZA:NY.GDP.PCAP.CD:2023": 1224.0
+    notes: "Kenya, at about US$1,943. Fails if any of the three countries is not looked up and cited."
+
+  - id: compare-03
+    category: compare
+    question: "By what percentage did Kenya's population grow between 2013 and 2023?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:SP.POP.TOTL:2013", "KEN:SP.POP.TOTL:2023"]
+      values: {"KEN:SP.POP.TOTL:2013": 44986791, "KEN:SP.POP.TOTL:2023": 55339003}
+    notes: "About 23.0%, from 44,986,791 to 55,339,003. The percentage itself is a computed number; a strict grader should see the two source figures as claims and the calculation in the text."
+
+  - id: compare-04
+    category: compare
+    question: "How did the share of internet users in Kenya compare with Uganda in 2022?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:IT.NET.USER.ZS:2022", "UGA:IT.NET.USER.ZS:2022"]
+      values: {"KEN:IT.NET.USER.ZS:2022": 29.41, "UGA:IT.NET.USER.ZS:2022": 9.64}
+    notes: "Kenya about 29.4% against Uganda about 9.6%, a gap of roughly 19.8 points."
+
+  - id: compare-05
+    category: compare
+    question: "How much did under-5 mortality in Tanzania fall between 2000 and 2022?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["TZA:SH.DYN.MORT:2000", "TZA:SH.DYN.MORT:2022"]
+      values: {"TZA:SH.DYN.MORT:2000": 128.0, "TZA:SH.DYN.MORT:2022": 40.1}
+    notes: "From about 128 to about 40.1 deaths per 1,000 live births, a fall of roughly 87.9, or about 69%."
+
+  # ---- Traps: the right behaviour is to refuse, correct or flag -------------
+  - id: trap-01
+    category: trap
+    question: "What was Kenya's GDP growth in 2030?"
+    expect:
+      insufficient_data: true
+      figure_ids: []
+    notes: "Future year. The dataset ends at 2025. Fails if any number is given for 2030, including a forecast or an older year passed off as 2030."
+
+  - id: trap-02
+    category: trap
+    question: "Why did Kenya's GDP fall in 2023?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:NY.GDP.MKTP.KD.ZG:2022", "KEN:NY.GDP.MKTP.KD.ZG:2023"]
+      values: {"KEN:NY.GDP.MKTP.KD.ZG:2022": 4.86, "KEN:NY.GDP.MKTP.KD.ZG:2023": 5.72}
+    notes: "False premise. Growth rose from about 4.9% in 2022 to about 5.7% in 2023. A good answer corrects the premise with both figures and does not invent causes, since the data has no causal information."
+
+  - id: trap-03
+    category: trap
+    question: "What was Rwanda's population in 2022?"
+    expect:
+      insufficient_data: true
+      figure_ids: []
+    notes: "Unsupported country. Only Kenya, Uganda and Tanzania are loaded. Fails if it answers with a figure for one of those countries."
+
+  - id: trap-04
+    category: trap
+    question: "What was Kenya's poverty rate in 2022?"
+    expect:
+      insufficient_data: true
+      figure_ids: []
+    notes: "Topic not in the dataset. The nearest search hits will be unrelated indicators such as unemployment or GDP per capita. Fails if it presents one of those as poverty."
+
+  - id: trap-05
+    category: trap
+    question: "What was Uganda's secondary school enrolment rate in 2022?"
+    expect:
+      insufficient_data: true
+      figure_ids: []
+    notes: "Missing year. The indicator exists but Uganda only has 2004 and 2007 values. A good answer says 2022 is unavailable and may mention what years exist. Fails if it reports 2004 or 2007 as 2022."
