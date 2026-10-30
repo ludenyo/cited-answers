@@ -194,33 +194,71 @@ def test_the_rubric_text_is_the_one_asked_for() -> None:
     assert generator.RUBRIC == "Answers the question directly; no number without a citation."
 
 
-# ---- the pass-rate gate ----------------------------------------------------------------
+# ---- the gate ------------------------------------------------------------------------
 
 
-def _results(*successes: bool) -> dict[str, Any]:
-    cases = [
-        {"success": s, "testCase": {"description": f"case {i}"}} for i, s in enumerate(successes)
-    ]
-    return {"results": {"results": cases}}
+def _run(name: str, **metrics: bool) -> dict[str, Any]:
+    """One promptfoo result: metric name -> did that assertion pass."""
+    components = [{"pass": ok, "assertion": {"metric": m}} for m, ok in metrics.items()]
+    return {
+        "success": all(metrics.values()),
+        "testCase": {"description": name},
+        "gradingResult": {"componentResults": components},
+    }
 
 
-def test_gate_summarizes_the_pass_rate_and_names_failures() -> None:
-    rate, failed = gate.summarize(gate.case_results(_results(True, True, False, True)))
-    assert rate == 0.75 and failed == ["case 2"]
+ALL_PASS = dict(claims=True, insufficient_data=True, latest_year=True, guardrails=True)
 
 
-def test_an_empty_run_fails_the_gate(tmp_path: Path) -> None:
+def test_all_hard_gates_passing_passes_the_gate() -> None:
+    lines, ok = gate.report([_run("a", **ALL_PASS, rubric=True, latency=True)])
+    assert ok and lines[0].startswith("hard gates: 1/1")
+
+
+@pytest.mark.parametrize("metric", gate.HARD_GATES)
+def test_any_failed_hard_gate_fails_the_gate_and_is_named(metric: str) -> None:
+    lines, ok = gate.report([_run("case-x", **{**ALL_PASS, metric: False})])
+    assert not ok
+    assert any("case-x" in line and metric in line for line in lines)
+
+
+@pytest.mark.parametrize("metric", gate.REPORT_ONLY)
+def test_a_failed_rubric_or_latency_is_reported_but_never_fails_the_gate(metric: str) -> None:
+    lines, ok = gate.report([_run("a", **ALL_PASS, **{metric: False})])
+    assert ok
+    assert f"report only: {metric} 0/1 passed" in lines
+    assert any(line.strip() == f"{metric}: a" for line in lines)
+
+
+def test_with_repeats_one_failing_run_fails_and_the_count_is_shown() -> None:
+    runs = [_run("flaky", **ALL_PASS), _run("flaky", **{**ALL_PASS, "guardrails": False})]
+    lines, ok = gate.report(runs + [_run("flaky", **ALL_PASS)])
+    assert not ok
+    assert lines[0] == "hard gates: 2/3 runs passed all of them"
+    assert "  FAILED 1 run(s): flaky  [guardrails]" in lines
+
+
+def test_a_run_with_no_assertion_results_is_a_failure_not_a_pass() -> None:
+    errored = {"success": False, "testCase": {"description": "boom"}, "gradingResult": None}
+    assert not gate.report([errored])[1]
+
+
+def test_an_empty_run_fails_the_gate() -> None:
+    assert gate.report([]) == (["no cases ran"], False)
+
+
+def test_main_exit_code_follows_the_hard_gates(tmp_path: Path) -> None:
     path = tmp_path / "r.json"
-    path.write_text(json.dumps(_results()))
+    path.write_text(json.dumps({"results": {"results": [_run("a", **ALL_PASS, rubric=False)]}}))
+    assert gate.main([str(path)]) == 0
+    bad = _run("a", **{**ALL_PASS, "claims": False})
+    path.write_text(json.dumps({"results": {"results": [bad]}}))
     assert gate.main([str(path)]) == 1
 
 
-def test_gate_passes_at_the_threshold_and_fails_below_it(tmp_path: Path) -> None:
-    path = tmp_path / "r.json"
-    path.write_text(json.dumps(_results(*([True] * 9 + [False]))))
-    assert gate.main([str(path)]) == 0  # 90% is enough
-    path.write_text(json.dumps(_results(*([True] * 8 + [False] * 2))))
-    assert gate.main([str(path)]) == 1
+def test_the_metric_names_match_what_the_case_generator_emits() -> None:
+    emitted = {a["metric"] for c in generator.generate_tests() for a in c["assert"]}
+    assert emitted == set(gate.HARD_GATES) | set(gate.REPORT_ONLY)
 
 
 # ---- the fixture and its tooling -------------------------------------------------------

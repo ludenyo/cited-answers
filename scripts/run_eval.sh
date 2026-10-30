@@ -16,8 +16,8 @@ export DATABASE_URL
 
 out=evals/promptfoo/output
 mkdir -p "$out"
-# --repeat 1: each case runs once, to keep the cost to a few cents.
+# EVAL_REPEAT runs per case (default 1, to keep the cost to a few cents; 3 to measure flakiness).
 # No `set -e` abort on failed cases: the gate below decides pass or fail.
-npx promptfoo eval -c evals/promptfoo/promptfooconfig.yaml --repeat 1 --no-cache \
+npx promptfoo eval -c evals/promptfoo/promptfooconfig.yaml --repeat "${EVAL_REPEAT:-1}" --no-cache \
   --max-concurrency 4 --output "$out/results.json" || true
 uv run python scripts/eval_gate.py "$out/results.json"

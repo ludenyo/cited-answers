@@ -41,12 +41,12 @@ cited-answers/
 ├── config/app.yaml        # retrieval, llm loop, verification tolerances, prompt file
 ├── scripts/export_eval_fixture.py  # full DB -> tests/fixtures/eval_figures.sql (needs real data)
 ├── scripts/eval_db.py     # migrate + load the fixture into the eval database
-├── scripts/eval_gate.py   # exit 1 when the eval pass rate is below the threshold
+├── scripts/eval_gate.py   # exit 1 when any deterministic eval assertion fails
 ├── scripts/run_eval.sh    # the eval run, shared by make eval and CI
 ├── scripts/load_test.py   # sends every eval question 5 times to a running /ask
 ├── evals/questions.yaml  # 30 eval questions (easy, compare, vague, latest, trap, guardrail)
 ├── evals/promptfoo/      # promptfoo suite: provider, assertions, case generator, rubric grader
-├── .github/workflows/evals.yml  # runs the suite on pull requests, fails below 90%
+├── .github/workflows/evals.yml  # runs the suite on pull requests; fails on any hard gate
 ├── tests/                 # pytest suite, mirrors the package
 ├── docker-compose.yml     # Postgres + pgvector
 ├── .env.example           # required env vars; copy to .env (gitignored)
@@ -74,7 +74,9 @@ make load-test  # 30 eval questions x 5 against a running server (150 requests; 
 builds its tests from it. Each case runs once through `answer.ask()` directly (no server) and
 must pass: every claim re-verified by `verify.py`, `insufficient_data`, `refused` and
 `guardrails_include`, the latest-year check, latency under 20 s and, for non-refused cases, an
-`llm-rubric`. A case passes only when all of them do; `scripts/eval_gate.py` fails below 90%.
+`llm-rubric`. `scripts/eval_gate.py` makes the deterministic ones hard gates (claims, flag,
+latest year, refusal and guardrails) that must pass in every run of every case. The rubric and
+latency are report-only. `EVAL_REPEAT=3 make eval` runs each case three times.
 
 - **Fixture database.** CI never calls the World Bank API. It loads
   `tests/fixtures/eval_figures.sql`: the full series (all years) for every figure the cases expect,
