@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: cited-answers evals (one run per case)
+
+# The provider receives the question as the prompt and calls the ask pipeline directly.
+prompts:
+  - "{{question}}"
+
+providers:
+  - id: file://provider.py
+    label: ask-pipeline
+
+# Cases come from evals/questions.yaml; nothing is repeated here.
+tests: file://tests_from_yaml.py:generate_tests
+
+defaultTest:
+  options:
+    # The rubric grader is a Claude model, so no second API key is needed.
+    provider:
+      id: file://grader.py
+      label: rubric-grader

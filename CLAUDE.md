@@ -38,8 +38,14 @@ cited-answers/
 ├── migrations/            # numbered SQL files
 ├── config/indicators.yaml # ingestion: countries, indicators, start year, unit overrides
 ├── config/app.yaml        # retrieval, llm loop, verification tolerances, prompt file
+├── scripts/export_eval_fixture.py  # full DB -> tests/fixtures/eval_figures.sql (needs real data)
+├── scripts/eval_db.py     # migrate + load the fixture into the eval database
+├── scripts/eval_gate.py   # exit 1 when the eval pass rate is below the threshold
+├── scripts/run_eval.sh    # the eval run, shared by make eval and CI
 ├── scripts/load_test.py   # sends every eval question 5 times to a running /ask
-├── evals/questions_draft.yaml  # 30 draft eval questions (easy, compare, vague, latest, trap, guardrail), not yet run
+├── evals/questions.yaml  # 30 eval questions (easy, compare, vague, latest, trap, guardrail)
+├── evals/promptfoo/      # promptfoo suite: provider, assertions, case generator, rubric grader
+├── .github/workflows/evals.yml  # runs the suite on pull requests, fails below 90%
 ├── tests/                 # pytest suite, mirrors the package
 ├── docker-compose.yml     # Postgres + pgvector
 ├── .env.example           # required env vars; copy to .env (gitignored)
@@ -56,8 +62,28 @@ make test     # pytest, loading .env so the DB tests run (they skip without TEST
 make lint     # ruff check + ruff format --check
 make migrate  # apply SQL migrations
 make ingest   # migrate, then fetch World Bank data and embed it
+make eval       # promptfoo suite, 1 run per case, against the fixture database (cited_answers_eval)
 make load-test  # 30 eval questions x 5 against a running server (150 requests; refused ones make no answering call)
 ```
+
+## Evals (promptfoo)
+
+`evals/questions.yaml` is the only source of cases and expected values; the promptfoo config
+builds its tests from it. Each case runs once through `answer.ask()` directly (no server) and
+must pass: every claim re-verified by `verify.py`, `insufficient_data`, `refused` and
+`guardrails_include`, the latest-year check, latency under 20 s and, for non-refused cases, an
+`llm-rubric`. A case passes only when all of them do; `scripts/eval_gate.py` fails below 90%.
+
+- **Fixture database.** CI never calls the World Bank API. It loads
+  `tests/fixtures/eval_figures.sql`: the full series (all years) for every figure the cases expect,
+  with stored embeddings. Regenerate with `scripts/export_eval_fixture.py` against a fully
+  ingested DB whenever the cases change. Fewer distractors than production, so retrieval is
+  easier than the real thing. `make eval` uses a separate `<db>_eval` database, never your data.
+- **The rubric grader** (`grader.py`) calls the SDK directly and sends no temperature, which
+  Haiku 5.5 rejects. It sees the answer plus one `cited` field per claim. It also flags numbers in
+  the answer text that have no claim, which `verify.py` does not parse.
+- Needs `npm ci` (promptfoo is pinned in `package.json`) and `ANTHROPIC_API_KEY`. In CI the key
+  comes from the repository secret `ANTHROPIC_API_KEY`; pull requests from forks get no secrets.
 
 ## Database port
 

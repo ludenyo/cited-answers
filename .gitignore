@@ -18,3 +18,8 @@ build/
 .vscode/
 .idea/
 .DS_Store
+
+# Evals
+node_modules/
+.promptfoo/
+evals/promptfoo/output/

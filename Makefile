@@ -1,4 +1,4 @@
-.PHONY: up down test lint migrate ingest load-test
+.PHONY: up down test lint migrate ingest load-test eval
 
 up:
 	docker compose up -d
@@ -25,3 +25,8 @@ ingest: migrate
 # Makes about 90 real model calls (a few US cents on Haiku).
 load-test:
 	uv run python scripts/load_test.py
+
+# Runs the promptfoo evals against a fixture database (cited_answers_eval), not your real data.
+# One run per case, about 30 questions: a few US cents on Haiku. Needs `make up` and `npm ci`.
+eval:
+	set -a; . ./.env; set +a; ./scripts/run_eval.sh
