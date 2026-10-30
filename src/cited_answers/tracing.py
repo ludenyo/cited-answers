@@ -210,6 +210,18 @@ def trace_attributes(**kwargs: Any) -> Iterator[None]:
         yield
 
 
+def event(name: str, **kwargs: Any) -> None:
+    """Record a point-in-time event under the current span, or as its own trace if there is
+    none. kwargs go to Langfuse: input, output, metadata, level, status_message. Never raises.
+    """
+    if _client is None:
+        return
+    try:
+        _client.create_event(name=name, **kwargs)
+    except Exception:
+        logger.warning("Tracing: could not record event %s", name, exc_info=True)
+
+
 def score_current_trace(name: str, value: float, data_type: str) -> None:
     """Attach a score to the trace being recorded. Never raises."""
     if _client is None:

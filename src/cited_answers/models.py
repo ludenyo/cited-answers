@@ -111,3 +111,11 @@ class AskResponse(BaseModel):
     latency_ms: int
     input_tokens: int  # summed over every model call made for this question
     output_tokens: int
+    # Guardrails. A refused question was never sent to the answering model.
+    refused: bool = False
+    refusal_reason: Literal["out_of_scope", "suspicious"] | None = None
+    # True when claims that failed verification, even after one retry, were dropped.
+    # Clients must show partial_answer_explanation whenever this is true.
+    partial_answer: bool = False
+    partial_answer_explanation: str | None = None
+    guardrails: list[str] = Field(default_factory=list)  # every guardrail that fired

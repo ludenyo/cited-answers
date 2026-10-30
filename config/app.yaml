@@ -8,3 +8,13 @@ verification:
   rel_tolerance: 0.001       # 0.1%, for large values like population
 answer:
   prompt_file: prompts/answer_system.md
+guardrails:
+  retry_max_iterations: 3     # model calls allowed for the single retry after failed claims
+  request_timeout_seconds: 30 # deadline for the whole request, classifier included
+  max_total_output_tokens: 4000   # output tokens summed over every model call in one request
+  classifier:
+    prompt_file: prompts/classify_system.md
+    max_tokens: 400           # thinking tokens count against this, so leave headroom
+  rate_limit:
+    requests: 60              # per client IP ...
+    window_seconds: 60        # ... per this many seconds

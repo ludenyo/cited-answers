@@ -23,6 +23,13 @@ class SettingsError(RuntimeError):
 class Settings:
     model: str
     max_tokens: int
+    # Model for the input classifier. None means "use the answering model": the classifier
+    # is a small, cheap call, and so is the model the app is already configured with.
+    classifier_model: str | None = None
+
+    @property
+    def guard_model(self) -> str:
+        return self.classifier_model or self.model
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -39,6 +46,7 @@ class Settings:
         return cls(
             model=model,
             max_tokens=int(os.environ.get("ANTHROPIC_MAX_TOKENS", DEFAULT_MAX_TOKENS)),
+            classifier_model=os.environ.get("ANTHROPIC_CLASSIFIER_MODEL", "").strip() or None,
         )
 
 
@@ -66,11 +74,34 @@ class AnswerConfig(BaseModel):
         return PROJECT_ROOT / self.prompt_file
 
 
+class ClassifierConfig(BaseModel):
+    prompt_file: str  # relative to the project root
+    max_tokens: int = Field(gt=0)
+
+    @property
+    def prompt_path(self) -> Path:
+        return PROJECT_ROOT / self.prompt_file
+
+
+class RateLimitConfig(BaseModel):
+    requests: int = Field(gt=0)  # allowed per client IP ...
+    window_seconds: float = Field(gt=0)  # ... in this many seconds
+
+
+class GuardrailsConfig(BaseModel):
+    retry_max_iterations: int = Field(gt=0)  # model calls allowed for the one retry
+    request_timeout_seconds: float = Field(gt=0)  # whole-request deadline
+    max_total_output_tokens: int = Field(gt=0)  # across every model call in one request
+    classifier: ClassifierConfig
+    rate_limit: RateLimitConfig
+
+
 class AppConfig(BaseModel):
     retrieval: RetrievalConfig
     llm: LlmConfig
     verification: VerificationConfig
     answer: AnswerConfig
+    guardrails: GuardrailsConfig
 
 
 def load_app_config(path: Path = APP_CONFIG_FILE) -> AppConfig:
