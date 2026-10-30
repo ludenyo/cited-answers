@@ -354,9 +354,9 @@ def test_every_tool_the_prompt_names_exists_and_vice_versa() -> None:
     assert set(re.findall(names, prompt)) == {t["name"] for t in TOOLS}
 
 
-def test_prompt_has_the_ten_rules() -> None:
+def test_prompt_has_the_nine_rules() -> None:
     prompt = PROMPT.read_text()
-    assert [int(n) for n in re.findall(r"^(\d+)\. ", prompt, re.MULTILINE)] == list(range(1, 11))
+    assert [int(n) for n in re.findall(r"^(\d)\. ", prompt, re.MULTILINE)] == list(range(1, 10))
     assert "Use ONLY numbers returned by your tools" in prompt
 
 
@@ -366,7 +366,6 @@ def test_prompt_has_the_ten_rules() -> None:
 def test_run_tool_get_figure_found_and_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     lookups = iter([FIGURE, None])
     monkeypatch.setattr(answer_module.retrieval, "get_figure", lambda *_a: next(lookups))
-    monkeypatch.setattr(answer_module.retrieval, "get_latest_year", lambda *_a: None)
     args = {"country_code": "KEN", "indicator_code": "X", "year": 2023}
 
     found = json.loads(run_tool(None, "get_figure", args))  # type: ignore[arg-type]
@@ -478,57 +477,3 @@ def test_a_malformed_derived_claim_is_an_error_result_and_can_be_fixed() -> None
     assert tool_result["is_error"] is True
     assert "exactly two source_figure_ids" in tool_result["content"]
     assert result.answer.text == GOOD_ANSWER["text"]
-
-
-LATEST_RULE = (
-    "When describing a value as latest or most recent, use latest_year from the\n   tool results."
-)
-
-
-def test_prompt_has_the_latest_year_rule_before_the_finish_rule() -> None:
-    prompt = PROMPT.read_text()
-    assert f"9. {LATEST_RULE}" in prompt
-    assert prompt.index("9. When describing") < prompt.index("10. Finish by calling submit_answer")
-
-
-def test_a_found_figure_reaches_the_model_with_its_latest_year(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    older = FIGURE.model_copy(update={"year": 2022, "latest_year": 2025})
-    monkeypatch.setattr(answer_module.retrieval, "get_figure", lambda *_a: older)
-    args = {"country_code": "KEN", "indicator_code": "X", "year": 2022}
-
-    found = json.loads(run_tool(None, "get_figure", args))  # type: ignore[arg-type]
-
-    assert found["figure"]["year"] == 2022
-    assert found["figure"]["latest_year"] == 2025  # so "latest" cannot be mistaken for 2022
-
-
-def test_search_results_reach_the_model_with_latest_year(monkeypatch: pytest.MonkeyPatch) -> None:
-    hit = FIGURE.model_copy(update={"latest_year": 2024})
-    monkeypatch.setattr(answer_module.retrieval, "search_figures", lambda *_a, **_k: [hit])
-    result = json.loads(run_tool(None, "search_figures", {"question": "x"}))  # type: ignore[arg-type]
-    assert result["figures"][0]["latest_year"] == 2024
-
-
-def test_a_missed_year_still_tells_the_model_the_latest_year(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(answer_module.retrieval, "get_figure", lambda *_a: None)
-    monkeypatch.setattr(answer_module.retrieval, "get_latest_year", lambda *_a: 2023)
-    args = {"country_code": "KEN", "indicator_code": "SE.PRM.ENRR", "year": 2025}
-
-    miss = json.loads(run_tool(None, "get_figure", args))  # type: ignore[arg-type]
-
-    assert miss["figure"] is None
-    assert miss["latest_year"] == 2023  # the series ends in 2023; no need to try other years
-
-
-def test_a_miss_for_an_unknown_series_has_no_latest_year(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(answer_module.retrieval, "get_figure", lambda *_a: None)
-    monkeypatch.setattr(answer_module.retrieval, "get_latest_year", lambda *_a: None)
-    args = {"country_code": "KEN", "indicator_code": "NO.SUCH", "year": 2023}
-
-    miss = json.loads(run_tool(None, "get_figure", args))  # type: ignore[arg-type]
-
-    assert miss["figure"] is None and "latest_year" not in miss

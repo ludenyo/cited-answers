@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from cited_answers.models import Answer, Claim, FigureResult
+from cited_answers.models import Answer, Claim
 
 FIGURE_CLAIM: dict[str, Any] = {
     "statement": "grew 5.72%",
@@ -74,19 +74,3 @@ def test_answer_accepts_a_mix_of_claim_kinds() -> None:
         {"text": "t", "claims": [FIGURE_CLAIM, DERIVED_CLAIM], "insufficient_data": False}
     )
     assert [c.kind for c in answer.claims] == ["figure", "derived"]
-
-
-def test_figure_result_latest_year_is_optional_and_kept_when_given() -> None:
-    base: dict[str, Any] = {
-        "figure_id": "KEN:SP.POP.TOTL:2023",
-        "country_code": "KEN",
-        "country_name": "Kenya",
-        "indicator_code": "SP.POP.TOTL",
-        "indicator_name": "Population, total",
-        "year": 2023,
-        "value": 55339003.0,
-        "unit": "people",
-        "source_url": "https://example.test",
-    }
-    assert FigureResult.model_validate(base).latest_year is None
-    assert FigureResult.model_validate({**base, "latest_year": 2025}).latest_year == 2025

@@ -24,6 +24,4 @@ Rules:
 7. If the question contains a false premise (e.g. assumes a decline that did
    not happen), correct it using the data.
 8. Keep answers short: 1-4 sentences, plain language, units stated.
-9. When describing a value as latest or most recent, use latest_year from the
-   tool results.
-10. Finish by calling submit_answer exactly once.
+9. Finish by calling submit_answer exactly once.
