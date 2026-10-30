@@ -192,6 +192,21 @@ def test_latest_year_and_rubric_apply_only_where_they_make_sense() -> None:
         assert ("rubric" in metrics) == (not q["expect"].get("refused", False))
 
 
+def test_a_report_only_guardrail_case_keeps_the_refusal_check_as_a_hard_gate() -> None:
+    cases = {c["metadata"]["id"]: c for c in generator.generate_tests()}
+    for case_id in ("guardrail-output-02", "guardrail-output-03"):
+        by_metric = {a["metric"]: a for a in cases[case_id]["assert"]}
+        assert by_metric["guardrails"]["config"]["guardrails_include"] == []
+        assert by_metric["guardrails"]["config"]["refused"] is False
+        assert by_metric["guardrails_report"]["config"]["guardrails_include"] == ["output_retry"]
+    # every other case gates on guardrails_include and has no separate report-only check
+    other = cases["guardrail-output-01"]
+    assert "guardrails_report" not in {a["metric"] for a in other["assert"]}
+    assert next(a for a in other["assert"] if a["metric"] == "guardrails")["config"][
+        "guardrails_include"
+    ] == ["output_retry"]
+
+
 def test_the_rubric_text_is_the_one_asked_for() -> None:
     assert generator.RUBRIC == "Answers the question directly; no number without a citation."
 
@@ -266,12 +281,62 @@ def test_the_metric_names_match_what_the_case_generator_emits() -> None:
 # ---- the fixture and its tooling -------------------------------------------------------
 
 
+FIGURE_ROW = re.compile(
+    r"^INSERT INTO figures \(.*?\) VALUES \('(?P<id>[^']+)', '(?P<country>[A-Z]{3})', '[^']*', "
+    r"'(?P<indicator>[A-Z0-9.]+)'",
+    re.MULTILINE,
+)
+
+
+def _fixture_rows() -> tuple[set[str], set[tuple[str, str]]]:
+    """(figure ids, (country, indicator) series) present in the fixture SQL."""
+    rows = [m.groupdict() for m in FIGURE_ROW.finditer(FIXTURE.read_text())]
+    return {r["id"] for r in rows}, {(r["country"], r["indicator"]) for r in rows}
+
+
 def test_the_fixture_has_every_figure_the_eval_cases_expect() -> None:
-    sql = FIXTURE.read_text()
-    ids = {i for q in QUESTIONS for i in q["expect"].get("figure_ids", [])}
-    assert ids
-    for figure_id in ids:
-        assert "INSERT INTO figures (id, " in sql and f"VALUES ('{figure_id}'," in sql, figure_id
+    ids, _ = _fixture_rows()
+    expected = {i for q in QUESTIONS for i in q["expect"].get("figure_ids", [])}
+    assert expected
+    assert not expected - ids
+
+
+def test_the_fixture_has_every_series_the_eval_cases_reference() -> None:
+    """Figure ids, latest-year checks and requires_series: each needs its series in the fixture."""
+    _, series = _fixture_rows()
+    needed: dict[tuple[str, str], str] = {}
+    for q in QUESTIONS:
+        expect = q["expect"]
+        for figure_id in expect.get("figure_ids", []):
+            country, indicator, _year = figure_id.split(":")
+            needed[(country, indicator)] = q["id"]
+        for key in ("latest_year_check", "requires_series"):
+            for pair in expect.get(key, []):
+                needed[(pair["country"], pair["indicator"])] = q["id"]
+    assert needed
+    missing = {
+        f"{c}:{i} (needed by {qid})" for (c, i), qid in needed.items() if (c, i) not in series
+    }
+    assert not missing, sorted(missing)
+
+
+def test_answerable_guardrail_cases_name_the_data_they_need() -> None:
+    """Guardrail cases cite no figure ids, so without requires_series the fixture lacks their data.
+
+    That is how the remittances series went missing: the case failed in CI, not on a laptop.
+    """
+    for q in QUESTIONS:
+        expect = q["expect"]
+        if q["category"] == "guardrail" and not expect.get("refused"):
+            assert expect.get("requires_series") or expect.get("figure_ids"), q["id"]
+
+
+def test_report_only_guardrails_are_flagged_only_on_the_two_flaky_cases() -> None:
+    flagged = {q["id"] for q in QUESTIONS if q["expect"].get("guardrails_report_only")}
+    assert flagged == {"guardrail-output-02", "guardrail-output-03"}
+    for q in QUESTIONS:
+        if q["id"] in flagged:
+            assert q["expect"]["guardrails_include"], q["id"]  # nothing to report otherwise
 
 
 def test_the_fixture_has_a_chunk_for_every_figure() -> None:
@@ -281,13 +346,14 @@ def test_the_fixture_has_a_chunk_for_every_figure() -> None:
     assert figures == chunks > 0
 
 
-def test_expected_series_covers_figure_ids_and_latest_year_pairs() -> None:
+def test_expected_series_covers_figure_ids_latest_year_pairs_and_required_series() -> None:
     questions = [
         {"id": "a", "expect": {"figure_ids": ["KEN:A.B:2023"]}},
         {"id": "b", "expect": {"latest_year_check": [{"country": "UGA", "indicator": "X.Y"}]}},
-        {"id": "c", "expect": {}},
+        {"id": "c", "expect": {"requires_series": [{"country": "TZA", "indicator": "Q.R"}]}},
+        {"id": "d", "expect": {}},
     ]
-    assert export.expected_series(questions) == [("KEN", "A.B"), ("UGA", "X.Y")]
+    assert export.expected_series(questions) == [("KEN", "A.B"), ("TZA", "Q.R"), ("UGA", "X.Y")]
     with pytest.raises(ValueError, match="bad figure id"):
         export.expected_series([{"id": "d", "expect": {"figure_ids": ["nope"]}}])
 

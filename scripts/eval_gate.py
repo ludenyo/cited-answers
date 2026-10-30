@@ -4,7 +4,8 @@ Run with: uv run python scripts/eval_gate.py evals/promptfoo/output/results.json
 Hard gates, which must all pass in every run of every case: claims re-verified by verify.py,
 the insufficient_data flag, the latest-year check, and refusal plus guardrails_include.
 Report-only, shown but never failing the build: the llm-rubric (a model's judgement, so
-noisy) and latency (it depends on the network and the provider, not on the code).
+noisy), latency (it depends on the network and the provider, not on the code), and the
+guardrails a case marks guardrails_report_only because they fire only sometimes.
 """
 
 import argparse
@@ -15,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 HARD_GATES = ("claims", "insufficient_data", "latest_year", "guardrails")
-REPORT_ONLY = ("rubric", "latency")
+REPORT_ONLY = ("rubric", "latency", "guardrails_report")
 
 
 def _components(result: dict[str, Any]) -> list[dict[str, Any]]:

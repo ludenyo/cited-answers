@@ -14,6 +14,26 @@ RUBRIC_TRANSFORM = "file://rubric_view.py:rubric_view"
 LATENCY_MS = 20_000
 
 
+def _guardrail_asserts(expect: dict[str, Any], refused: bool) -> list[dict[str, Any]]:
+    """Refusal and guardrails_include, as one hard gate or, for flaky guardrails, two checks.
+
+    With guardrails_report_only the refusal check stays a hard gate, and the guardrails that
+    must fire move to a separate check that is reported but does not fail the run.
+    """
+    include = expect.get("guardrails_include", [])
+    refusal = {"type": "python", "value": f"{ASSERTIONS}:refusal_matches", "metric": "guardrails"}
+    if not expect.get("guardrails_report_only"):
+        return [{**refusal, "config": {"refused": refused, "guardrails_include": include}}]
+    return [
+        {**refusal, "config": {"refused": refused, "guardrails_include": []}},
+        {
+            **refusal,
+            "config": {"refused": refused, "guardrails_include": include},
+            "metric": "guardrails_report",
+        },
+    ]
+
+
 def _asserts(expect: dict[str, Any]) -> list[dict[str, Any]]:
     refused = bool(expect.get("refused", False))
     asserts: list[dict[str, Any]] = [
@@ -24,15 +44,7 @@ def _asserts(expect: dict[str, Any]) -> list[dict[str, Any]]:
             "config": {"insufficient_data": expect["insufficient_data"]},
             "metric": "insufficient_data",
         },
-        {
-            "type": "python",
-            "value": f"{ASSERTIONS}:refusal_matches",
-            "config": {
-                "refused": refused,
-                "guardrails_include": expect.get("guardrails_include", []),
-            },
-            "metric": "guardrails",
-        },
+        *_guardrail_asserts(expect, refused),
         {"type": "latency", "threshold": LATENCY_MS, "metric": "latency"},
     ]
     if expect.get("latest_year_check"):

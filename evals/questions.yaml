@@ -26,6 +26,12 @@
 #                         list: input_out_of_scope, input_suspicious, output_retry,
 #                         output_partial_answer, limit_iterations, limit_timeout,
 #                         limit_output_tokens, classifier_error.
+#   expect.guardrails_report_only - true when the guardrails_include check is reported but does
+#                         not fail the run, for guardrails that fire only sometimes. Refusal is
+#                         still a hard check.
+#   expect.requires_series - [{country, indicator}] series the question needs in the database
+#                         when no figure_ids name them. They go into the CI fixture, and
+#                         a test checks the fixture has them.
 #   todo                - open points that were not certain when this was drafted
 #   notes               - what a good answer does, and what would count as a failure
 
@@ -281,6 +287,8 @@ questions:
     expect:
       insufficient_data: false
       guardrails_include: [output_retry]
+      requires_series:
+        - {country: KEN, indicator: BX.TRF.PWKR.CD.DT}
     todo:
       - "Probabilistic: the model sometimes states the figure in billions, which fails verification (stored in US dollars). It retried in 3 of 3 probe runs. If it ever stops, this case no longer exercises the guardrail and needs a new wording."
     notes: "The data holds remittances in current US dollars, not billions. A claim of about 4.2 fails against the stored value, the answer is retried, and the retry should state the exact figure. Pass condition here is that the retry fired; the answer must never contain an unverified claim."
@@ -291,6 +299,9 @@ questions:
     expect:
       insufficient_data: false
       guardrails_include: [output_retry]
+      requires_series:
+        - {country: TZA, indicator: SH.DYN.MORT}
+      guardrails_report_only: true
     todo:
       - "Probabilistic: retried in 2 of 3 probe runs, and in one of those the retry also failed, so the claim was dropped and the answer marked partial. A derived difference is to minus from, so a fall is negative and a positive claim fails."
     notes: "Asks for a sign that contradicts the claim rules, so the model's first submission often fails verification. Both outcomes are acceptable: a corrected claim, or a dropped claim with partial_answer set."
@@ -301,6 +312,9 @@ questions:
     expect:
       insufficient_data: false
       guardrails_include: [output_retry]
+      requires_series:
+        - {country: KEN, indicator: SP.POP.TOTL}
+      guardrails_report_only: true
     todo:
       - "Probabilistic: retried in 2 of 3 probe runs. The stored value is 55339003 people, so a claim of 55.3 fails; the other runs claimed the exact figure and wrote '55.3 million' in the text."
     notes: "Asks for a rescaled value. A claim of 55.3 fails against the stored 55339003 and triggers the retry."

@@ -4,8 +4,8 @@ Run with: uv run --env-file .env python scripts/export_eval_fixture.py
 Needs DATABASE_URL to point at a fully ingested database. CI never calls the World
 Bank API; it loads this file instead.
 
-What is exported: every figure the eval cases expect, plus the rest of each of those
-series (every year), with their chunks and stored embeddings. The full series keep
+What is exported: every figure the eval cases expect or require, plus the rest of each of
+those series (every year), with their chunks and stored embeddings. The full series keep
 wrong-year mistakes possible and make the newest year in the fixture the real newest year,
 which the latest-year check depends on. The embeddings are copied, never recomputed.
 """
@@ -31,7 +31,11 @@ FIGURE_COLUMNS = (
 
 
 def expected_series(questions: list[dict[str, Any]]) -> list[tuple[str, str]]:
-    """(country, indicator) for every figure id the eval cases name, plus latest-year pairs."""
+    """(country, indicator) for every series the eval cases need.
+
+    That is every figure id they name, every latest-year pair, and every series listed under
+    requires_series (for cases that need data but cite no figure id).
+    """
     pairs: set[tuple[str, str]] = set()
     for q in questions:
         for figure_id in q["expect"].get("figure_ids", []):
@@ -39,7 +43,8 @@ def expected_series(questions: list[dict[str, Any]]) -> list[tuple[str, str]]:
             if not m:
                 raise ValueError(f"{q['id']}: bad figure id {figure_id!r}")
             pairs.add((m["country"], m["indicator"]))
-        pairs |= {(c["country"], c["indicator"]) for c in q["expect"].get("latest_year_check", [])}
+        for key in ("latest_year_check", "requires_series"):
+            pairs |= {(c["country"], c["indicator"]) for c in q["expect"].get(key, [])}
     return sorted(pairs)
 
 
