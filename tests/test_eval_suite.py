@@ -194,17 +194,17 @@ def test_latest_year_and_rubric_apply_only_where_they_make_sense() -> None:
 
 def test_a_report_only_guardrail_case_keeps_the_refusal_check_as_a_hard_gate() -> None:
     cases = {c["metadata"]["id"]: c for c in generator.generate_tests()}
-    for case_id in ("guardrail-output-02", "guardrail-output-03"):
+    for case_id in ("guardrail-output-01", "guardrail-output-02", "guardrail-output-03"):
         by_metric = {a["metric"]: a for a in cases[case_id]["assert"]}
         assert by_metric["guardrails"]["config"]["guardrails_include"] == []
         assert by_metric["guardrails"]["config"]["refused"] is False
         assert by_metric["guardrails_report"]["config"]["guardrails_include"] == ["output_retry"]
     # every other case gates on guardrails_include and has no separate report-only check
-    other = cases["guardrail-output-01"]
+    other = cases["guardrail-injection-01"]
     assert "guardrails_report" not in {a["metric"] for a in other["assert"]}
     assert next(a for a in other["assert"] if a["metric"] == "guardrails")["config"][
         "guardrails_include"
-    ] == ["output_retry"]
+    ] == ["input_suspicious"]
 
 
 def test_the_rubric_text_is_the_one_asked_for() -> None:
@@ -331,9 +331,9 @@ def test_answerable_guardrail_cases_name_the_data_they_need() -> None:
             assert expect.get("requires_series") or expect.get("figure_ids"), q["id"]
 
 
-def test_report_only_guardrails_are_flagged_only_on_the_two_flaky_cases() -> None:
+def test_report_only_guardrails_are_flagged_only_on_the_three_flaky_output_cases() -> None:
     flagged = {q["id"] for q in QUESTIONS if q["expect"].get("guardrails_report_only")}
-    assert flagged == {"guardrail-output-02", "guardrail-output-03"}
+    assert flagged == {"guardrail-output-01", "guardrail-output-02", "guardrail-output-03"}
     for q in QUESTIONS:
         if q["id"] in flagged:
             assert q["expect"]["guardrails_include"], q["id"]  # nothing to report otherwise
