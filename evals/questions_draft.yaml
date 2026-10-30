@@ -7,7 +7,7 @@
 # 0.1% relative, so about 0.05 for percentages and about 55,000 for Kenya's population.
 #
 # Fields:
-#   id, category        - easy | compare | vague | trap
+#   id, category        - easy | compare | vague | latest | trap
 #   question            - exactly what is sent to POST /ask
 #   expect.insufficient_data - what the Answer flag should be
 #   expect.figure_ids   - figures a correct answer should cite
@@ -16,6 +16,10 @@
 #                         source figure ids as [from, to], and the value. Definitions:
 #                         difference = to - from; percent_change = (to - from) / from * 100;
 #                         ratio = from / to. A fall is negative.
+#   expect.latest_year_check - [{country, indicator}] pairs. For each, the newest year the answer
+#                         cites must equal the newest year in the database. Citing older years
+#                         as well is fine; citing only older years fails (an old value reported
+#                         as the latest). scripts/load_test.py checks this against the database.
 #   todo                - open points that were not certain when this was drafted
 #   notes               - what a good answer does, and what would count as a failure
 
@@ -167,7 +171,33 @@ questions:
     todo:
       - "'Power at home' is a colloquial paraphrase of access to electricity. Confirm the search finds EG.ELC.ACCS.ZS; if it does not, the retrieval, not the model, needs work."
       - "Which years are acceptable? The question names none."
-    notes: "About 55.3% of the population have access to electricity (2024). The answer is a share, not a head count; fails if it invents a number of people."
+    notes: "A good answer says a head count isn't available and gives the 2024 share (55.3% of the population have access to electricity). Fails if it reports an older year as the latest, or invents a number of people."
+
+  # ---- Latest: ask for the most recent value; the answer must use the newest year -------
+  # The newest year differs by series, so a model that assumes one year fails somewhere.
+  - id: latest-01
+    category: latest
+    question: "What is the most recent figure for Kenya's population?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:SP.POP.TOTL:2025"]
+      values: {"KEN:SP.POP.TOTL:2025": 57532493}
+      latest_year_check:
+        - {country: KEN, indicator: SP.POP.TOTL}
+    notes: "57,532,493 people in 2025, the newest year in the database for this series. Fails if it cites 2024 or any older year as the most recent."
+
+  - id: latest-02
+    category: latest
+    question: "What is the latest available primary school enrolment rate in Kenya?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:SE.PRM.ENRR:2023"]
+      values: {"KEN:SE.PRM.ENRR:2023": 98.25}
+      latest_year_check:
+        - {country: KEN, indicator: SE.PRM.ENRR}
+    todo:
+      - "This series ends in 2023 while most others reach 2024 or 2025, so a model that tries a later year gets a miss and must fall back. Check that it ends on 2023 and not on an earlier year such as 2022 (98.55)."
+    notes: "About 98.25% gross enrolment in 2023, the newest year with data for this series. Fails if it cites 2022 or earlier as the latest."
 
   # ---- Traps: the right behaviour is to refuse, correct or flag -------------
   - id: trap-01

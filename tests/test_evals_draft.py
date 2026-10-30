@@ -12,7 +12,7 @@ from cited_answers.verify import compute_derived, values_match
 
 EVAL_FILE = Path(__file__).parents[1] / "evals" / "questions_draft.yaml"
 QUESTIONS: list[dict[str, Any]] = yaml.safe_load(EVAL_FILE.read_text())["questions"]
-CATEGORIES = {"easy": 5, "compare": 5, "vague": 3, "trap": 5}
+CATEGORIES = {"easy": 5, "compare": 5, "vague": 3, "latest": 2, "trap": 5}
 FIGURE_ID = re.compile(r"^[A-Z]{3}:[A-Z0-9.]+:\d{4}$")
 
 
@@ -85,3 +85,33 @@ def test_vague_questions_record_what_is_still_uncertain() -> None:
     for q in QUESTIONS:
         if q["category"] == "vague":
             assert q["todo"], q["id"]
+
+
+def _latest_checks() -> list[tuple[str, dict[str, Any]]]:
+    return [(q["id"], pair) for q in QUESTIONS for pair in q["expect"].get("latest_year_check", [])]
+
+
+def test_the_two_latest_cases_carry_a_latest_year_check() -> None:
+    latest = [q for q in QUESTIONS if q["category"] == "latest"]
+    assert len(latest) == 2
+    assert all(q["expect"].get("latest_year_check") for q in latest)
+
+
+@pytest.mark.parametrize(("question_id", "pair"), _latest_checks())
+def test_each_latest_check_names_a_pair_the_expected_figures_cover(
+    question_id: str, pair: dict[str, Any]
+) -> None:
+    question = next(q for q in QUESTIONS if q["id"] == question_id)
+    prefix = f"{pair['country']}:{pair['indicator']}:"
+    expected = [i for i in question["expect"]["figure_ids"] if i.startswith(prefix)]
+    assert expected, f"{question_id}: no expected figure for {prefix}"
+    assert set(pair) == {"country", "indicator"}
+
+
+def test_vague_03_keeps_its_label_and_states_the_head_count_rule() -> None:
+    vague = next(q for q in QUESTIONS if q["id"] == "vague-03")
+    assert vague["expect"]["insufficient_data"] is False
+    assert vague["expect"]["figure_ids"] == ["UGA:EG.ELC.ACCS.ZS:2024"]
+    assert vague["expect"]["values"] == {"UGA:EG.ELC.ACCS.ZS:2024": 55.3}
+    assert "head count isn't available" in vague["notes"]
+    assert "older year as the latest" in vague["notes"]
