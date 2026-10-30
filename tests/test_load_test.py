@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 from pathlib import Path
 from types import ModuleType
 
@@ -537,3 +538,10 @@ def test_saved_runs_say_whether_the_working_tree_was_dirty(tmp_path: Path) -> No
     meta = json.loads(out.read_text())["meta"]
     assert meta["dirty"] in (True, False, None)
     assert "commit" in meta
+
+
+def test_cells_stay_apart_even_for_three_digit_counts() -> None:
+    big = [_row("q1")] * 100  # 100/100 is the widest cell the table has to hold
+    text = lt.compare_runs([("a", _run(big, ["p1"])), ("b", _run(big, ["p2"]))])
+    total = next(line for line in text.splitlines() if line.startswith("ALL"))
+    assert re.search(r"100/100\s+100/100", total)  # separated, never run together

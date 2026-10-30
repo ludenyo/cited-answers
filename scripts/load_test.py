@@ -383,7 +383,10 @@ def _latest_year_cell(s: dict[str, float]) -> str:
     return f"{int(s['latest'])}/{int(s['latest_n'])}" if s["latest_n"] else "-"
 
 
-def _group(stats: list[dict[str, float]], cell: Any, width: int = 6) -> str:
+CELL = 8  # wide enough for "100/100"
+
+
+def _group(stats: list[dict[str, float]], cell: Any, width: int = CELL) -> str:
     return "".join(f"{cell(s):<{width}}" for s in stats)
 
 
@@ -409,8 +412,8 @@ def compare_runs(runs: list[tuple[str, dict[str, Any]]]) -> str:
     letters = [chr(ord("A") + i) for i in range(len(runs))]
     ids = list(dict.fromkeys(r["id"] for _, run in runs for r in run["results"]))
     shared = [i for i in ids if all(any(r["id"] == i for r in run["results"]) for _, run in runs)]
-    head = " ".join(f"{letter:<5}" for letter in letters) + " "
-    width = 6 * len(runs) + 2
+    head = "".join(f"{letter:<{CELL}}" for letter in letters)
+    width = CELL * len(runs) + 2
     lines = ["runs:"] + [
         _describe_run(L, n, run) for L, (n, run) in zip(letters, runs, strict=True)
     ]
