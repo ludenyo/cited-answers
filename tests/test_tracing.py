@@ -499,6 +499,7 @@ def test_search_records_a_retriever_with_a_nested_embedding(
     assert embed.attributes["langfuse.observation.input"] == "inflation"
     output = json.loads(search.attributes["langfuse.observation.output"])
     assert output[0]["figure_id"] == "TZA:FP.CPI.TOTL.ZG:2023" and output[0]["distance"] < 1e-6
+    assert output[0]["latest_year"] == 2023
     assert json.loads(search.attributes["langfuse.observation.input"])["question"] == "inflation"
     assert search.attributes["langfuse.observation.metadata.result_count"] == str(len(output))
 

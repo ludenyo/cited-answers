@@ -3,6 +3,7 @@ import psycopg
 from cited_answers.retrieval import (
     get_figure,
     get_figure_by_id,
+    get_latest_year,
     list_indicators,
     search_figures,
 )
@@ -87,3 +88,36 @@ def test_list_indicators_returns_each_indicator_once_in_code_order(
     gdp = next(i for i in indicators if i.indicator_code == "NY.GDP.MKTP.KD.ZG")
     assert gdp.indicator_name == "GDP growth (annual %)"
     assert gdp.unit == "annual %"
+
+
+def test_every_lookup_reports_the_latest_year_of_its_series(seeded_db: psycopg.Connection) -> None:
+    # Kenya GDP growth has 2022 and 2023 in the fixture, so both rows report 2023.
+    older = get_figure(seeded_db, "KEN", "NY.GDP.MKTP.KD.ZG", 2022)
+    newer = get_figure(seeded_db, "KEN", "NY.GDP.MKTP.KD.ZG", 2023)
+    assert older is not None and older.year == 2022 and older.latest_year == 2023
+    assert newer is not None and newer.year == 2023 and newer.latest_year == 2023
+
+    by_id = get_figure_by_id(seeded_db, "KEN:NY.GDP.MKTP.KD.ZG:2022")
+    assert by_id is not None and by_id.latest_year == 2023
+
+    # A single-year series is its own latest year, and series do not borrow from each other.
+    pop = get_figure(seeded_db, "KEN", "SP.POP.TOTL", 2023)
+    assert pop is not None and pop.latest_year == 2023
+
+
+def test_search_results_carry_the_latest_year(seeded_db: psycopg.Connection) -> None:
+    results = search_figures(
+        seeded_db, "gdp", k=5, max_distance=2.0, embed=lambda _t: [axis_vector(1)]
+    )
+    by_id = {r.figure_id: r for r in results}
+    assert (
+        by_id["KEN:NY.GDP.MKTP.KD.ZG:2022"].latest_year == 2023
+    )  # the older row knows the newer year
+    assert all(r.latest_year is not None for r in results)
+
+
+def test_get_latest_year(seeded_db: psycopg.Connection) -> None:
+    assert get_latest_year(seeded_db, "KEN", "NY.GDP.MKTP.KD.ZG") == 2023
+    assert get_latest_year(seeded_db, "UGA", "SP.DYN.LE00.IN") == 2023
+    assert get_latest_year(seeded_db, "KEN", "NO.SUCH.CODE") is None
+    assert get_latest_year(seeded_db, "XXX", "SP.POP.TOTL") is None

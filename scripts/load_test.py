@@ -6,7 +6,7 @@ the answers against the eval file, and save results so two runs can be compared.
     uv run --env-file .env uvicorn cited_answers.api:app          # in one terminal
     uv run --env-file .env python scripts/load_test.py            # in another
     uv run --env-file .env python scripts/load_test.py --save evals/results/after.json
-    uv run python scripts/load_test.py --compare evals/results/before.json evals/results/after.json
+    uv run python scripts/load_test.py --compare evals/results/a.txt evals/results/b.json
     uv run python scripts/load_test.py --repeats 1 --only easy-01 trap-02
 
 This makes real model calls. 20 questions x 5 repeats is 100 requests, roughly 5 to 15
@@ -240,16 +240,26 @@ def result_to_dict(result: Result) -> dict[str, Any]:
     }
 
 
+def _git(*args: str) -> subprocess.CompletedProcess[str] | None:
+    try:
+        return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)  # noqa: S603, S607
+    except OSError:
+        return None
+
+
 def git_commit() -> str | None:
     """Short hash of the checked-out commit, so a saved run says what code produced it."""
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=ROOT, capture_output=True, text=True, check=True,
-        )  # fmt: skip
-    except (OSError, subprocess.CalledProcessError):
-        return None
-    return out.stdout.strip() or None
+    out = _git("rev-parse", "--short", "HEAD")
+    return out.stdout.strip() or None if out and out.returncode == 0 else None
+
+
+def git_dirty() -> bool | None:
+    """True when tracked files differ from HEAD, so the run used code not yet committed.
+
+    Results saved while this is true belong to the commit that is about to be made.
+    """
+    out = _git("diff", "--quiet", "HEAD")
+    return None if out is None or out.returncode not in (0, 1) else out.returncode == 1
 
 
 def save_results(path: Path, results: list[Result], meta: dict[str, Any]) -> None:
@@ -304,73 +314,120 @@ def summarize(questions: list[Question], results: list[Result]) -> str:
     return "\n".join(lines)
 
 
-# ---- comparing two saved runs ------------------------------------------------------------
+# ---- loading and comparing saved runs ---------------------------------------------------
+
+_PROGRESS = re.compile(
+    r"^\[\s*\d+/\d+\]\s+(?P<id>\S+)\s+run (?P<run>\d+)\s+(?P<seconds>[\d.]+)s\s+"
+    r"pass_rate=(?P<pass_rate>[\d.]+)\s+insufficient_data=(?P<flag>True|False)\s+"
+    r"\((?P<match>as expected|DIFFERS from eval file)\)(?:\s+latest_year=(?P<latest>ok|STALE))?"
+)
+_FAILED = re.compile(r"^\[\s*\d+/\d+\]\s+(?P<id>\S+)\s+run (?P<run>\d+)\s+FAILED")
+_VERSIONS = re.compile(r"^prompt versions seen: (?P<versions>.+)$", re.MULTILINE)
+
+
+def _row_from_progress(match: re.Match[str]) -> dict[str, Any]:
+    return {
+        "id": match["id"],
+        "run": int(match["run"]),
+        "ok": True,
+        "seconds": float(match["seconds"]),
+        "insufficient_data": match["flag"] == "True",
+        "as_expected": match["match"] == "as expected",
+        "pass_rate": float(match["pass_rate"]),
+        "latest_ok": None if match["latest"] is None else match["latest"] == "ok",
+    }
+
+
+def parse_text_run(text: str) -> dict[str, Any]:
+    """Rebuild a run from this script's own printed output (for runs saved only as text)."""
+    rows: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        if matched := _PROGRESS.match(line):
+            rows.append(_row_from_progress(matched))
+        elif failed := _FAILED.match(line):
+            rows.append({"id": failed["id"], "run": int(failed["run"]), "ok": False,
+                         "as_expected": None, "pass_rate": None, "latest_ok": None})  # fmt: skip
+    versions = _VERSIONS.search(text)
+    prompts = [v.strip() for v in versions["versions"].split(",")] if versions else []
+    return {"meta": {"commit": None, "prompt_versions": prompts, "source": "text"}, "results": rows}
+
+
+def load_run(path: Path) -> dict[str, Any]:
+    """A saved run from a .json file (--save) or a .txt file (the script's printed output)."""
+    if path.suffix == ".json":
+        return json.loads(path.read_text())
+    return parse_text_run(path.read_text())
 
 
 def _stats(rows: list[dict[str, Any]]) -> dict[str, float]:
     ok = [r for r in rows if r["ok"]]
-    checked = [r for r in ok if r["latest_ok"] is not None]
+    checked = [r for r in ok if r.get("latest_ok") is not None]
     return {
         "ok": len(ok),
-        "n": len(rows),
         "flag": sum(r["as_expected"] is True for r in ok),
         "latest": sum(r["latest_ok"] is True for r in checked),
         "latest_n": len(checked),
         "pass_rate": _mean([r["pass_rate"] or 0.0 for r in ok]),
-        "tokens_in": _mean([float(r["input_tokens"]) for r in ok]),
-        "seconds": _mean([r["seconds"] for r in ok]),
     }
 
 
-def _pair(before: float, after: float, fmt: str) -> str:
-    return f"{before:{fmt}} -> {after:{fmt}}"
+def _flag_cell(s: dict[str, float]) -> str:
+    return f"{int(s['flag'])}/{int(s['ok'])}" if s["ok"] else "-"
 
 
-def _compare_row(label: str, b: dict[str, float], a: dict[str, float]) -> str:
-    latest = (
-        "-"
-        if not (b["latest_n"] or a["latest_n"])
-        else (f"{int(b['latest'])}/{int(b['latest_n'])} -> {int(a['latest'])}/{int(a['latest_n'])}")
-    )
+def _rate_cell(s: dict[str, float]) -> str:
+    return f"{s['pass_rate']:.2f}" if s["ok"] else "-"
+
+
+def _latest_year_cell(s: dict[str, float]) -> str:
+    return f"{int(s['latest'])}/{int(s['latest_n'])}" if s["latest_n"] else "-"
+
+
+def _group(stats: list[dict[str, float]], cell: Any, width: int = 6) -> str:
+    return "".join(f"{cell(s):<{width}}" for s in stats)
+
+
+def _compare_line(label: str, stats: list[dict[str, float]]) -> str:
     return (
-        f"{label:<12} {int(b['flag'])}/{int(b['ok'])} -> {int(a['flag'])}/{int(a['ok'])}".ljust(34)
-        + f"{latest:<16}"
-        + f"{_pair(b['pass_rate'], a['pass_rate'], '.2f'):<14}"
-        + f"{_pair(b['tokens_in'], a['tokens_in'], '.0f'):<17}"
-        + _pair(b["seconds"], a["seconds"], ".1f")
+        f"{label:<13}{_group(stats, _flag_cell)}  {_group(stats, _rate_cell)}  "
+        f"{_group(stats, _latest_year_cell)}"
     )
 
 
-def _rows_for(rows: list[dict[str, Any]], question_id: str) -> list[dict[str, Any]]:
-    return [r for r in rows if r["id"] == question_id]
-
-
-def _shared_ids(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> list[str]:
-    """Question ids present in both runs, in the order of the first run."""
-    in_after = {r["id"] for r in after}
-    return [i for i in dict.fromkeys(r["id"] for r in before) if i in in_after]
-
-
-def _describe(run: dict[str, Any], label: str) -> str:
+def _describe_run(letter: str, name: str, run: dict[str, Any]) -> str:
     meta = run["meta"]
-    return f"{label} commit {meta.get('commit')}, prompts {meta.get('prompt_versions')}"
+    commit = meta.get("commit") or "-"
+    if meta.get("dirty"):
+        commit += " + uncommitted changes"
+    prompts = ", ".join(meta.get("prompt_versions") or []) or "-"
+    requests = len(run["results"])
+    return f"  {letter}  {name:<30} prompt {prompts:<10} commit {commit:<34} {requests} requests"
 
 
-def compare_runs(before: dict[str, Any], after: dict[str, Any]) -> str:
-    """Side-by-side figures for two saved runs, per question and overall."""
-    ids = _shared_ids(before["results"], after["results"])
-    header = (
-        f"{'question':<12} {'flag ok':<22}{'latest year':<16}"
-        f"{'pass_rate':<14}{'tokens in':<17}seconds"
-    )
-    lines = [_describe(before, "before:"), _describe(after, "after: "), "", header]
+def compare_runs(runs: list[tuple[str, dict[str, Any]]]) -> str:
+    """Per-question flag agreement, pass rate and latest-year results for two or more runs."""
+    letters = [chr(ord("A") + i) for i in range(len(runs))]
+    ids = list(dict.fromkeys(r["id"] for _, run in runs for r in run["results"]))
+    shared = [i for i in ids if all(any(r["id"] == i for r in run["results"]) for _, run in runs)]
+    head = " ".join(f"{letter:<5}" for letter in letters) + " "
+    width = 6 * len(runs) + 2
+    lines = ["runs:"] + [
+        _describe_run(L, n, run) for L, (n, run) in zip(letters, runs, strict=True)
+    ]
+    lines += [
+        "",
+        "flag agreement = answers whose insufficient_data matched the eval file (matched/answered)",
+        "latest year = answers whose newest cited year was the newest in the database",
+        "              (- when the question has no such check)",
+        "",
+        f"{'question':<13}{'flag agreement':<{width}}{'pass rate':<{width}}latest year",
+        f"{'':<13}{head:<{width}}{head:<{width}}{head}",
+    ]
     for question_id in ids:
-        b = _stats(_rows_for(before["results"], question_id))
-        a = _stats(_rows_for(after["results"], question_id))
-        lines.append(_compare_row(question_id, b, a))
-    both = [r for r in before["results"] if r["id"] in ids]
-    both_after = [r for r in after["results"] if r["id"] in ids]
-    lines += ["", _compare_row("ALL", _stats(both), _stats(both_after))]
+        stats = [_stats([r for r in run["results"] if r["id"] == question_id]) for _, run in runs]
+        lines.append(_compare_line(question_id, stats))
+    totals = [_stats([r for r in run["results"] if r["id"] in shared]) for _, run in runs]
+    lines += ["", _compare_line(f"ALL ({len(shared)})", totals)]
     return "\n".join(lines)
 
 
@@ -398,8 +455,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--only", nargs="+", metavar="ID", help="run just these question ids")
     parser.add_argument("--save", type=Path, help="write the results to this JSON file")
     parser.add_argument(
-        "--compare", nargs=2, type=Path, metavar=("BEFORE", "AFTER"),
-        help="print a comparison of two saved runs and exit; sends no requests",
+        "--compare", nargs="+", type=Path, metavar="RUN",
+        help="compare two or more saved runs (.json or .txt), oldest first; sends no requests",
     )  # fmt: skip
     args = parser.parse_args(argv)
     if args.repeats < 1 or args.concurrency < 1:
@@ -450,8 +507,9 @@ def main(
     """transport and latest_years let tests run the whole script without a server or database."""
     args = parse_args(argv)
     if args.compare:
-        before, after = (json.loads(p.read_text()) for p in args.compare)
-        print(compare_runs(before, after))
+        if len(args.compare) < 2:
+            raise SystemExit("--compare needs at least two saved runs")
+        print(compare_runs([(p.stem, load_run(p)) for p in args.compare]))
         return 0
     questions = load_questions(args.questions, args.only)
     if latest_years is None:
@@ -461,6 +519,7 @@ def main(
     if args.save:
         meta = {
             "commit": git_commit(),
+            "dirty": git_dirty(),
             "saved_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "url": args.url,
             "repeats": args.repeats,

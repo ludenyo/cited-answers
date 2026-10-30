@@ -18,7 +18,10 @@ from cited_answers.settings import get_app_config
 EmbedFn = Callable[[list[str]], list[list[float]]]
 
 _COLUMNS = """f.id AS figure_id, f.country_code, f.country_name, f.indicator_code,
-       f.indicator_name, f.year, f.value, f.unit, f.source_url"""
+       f.indicator_name, f.year, f.value, f.unit, f.source_url,
+       (SELECT max(l.year) FROM figures l
+         WHERE l.country_code = f.country_code
+           AND l.indicator_code = f.indicator_code) AS latest_year"""
 
 _SEARCH = f"""
 SELECT {_COLUMNS}, c.embedding <=> %(vec)s AS distance
@@ -41,6 +44,8 @@ WHERE f.country_code = %s AND f.indicator_code = %s AND f.year = %s
 """
 
 _BY_ID = f"SELECT {_COLUMNS} FROM figures f WHERE f.id = %s"
+
+_LATEST_YEAR = "SELECT max(year) FROM figures WHERE country_code = %s AND indicator_code = %s"
 
 
 def _to_figure(row: dict[str, Any]) -> FigureResult:
@@ -91,7 +96,12 @@ def search_figures(
         figures = [_to_figure(row) for row in rows]
         span.update(
             output=[
-                {"figure_id": f.figure_id, "value": f.value, "distance": f.distance}
+                {
+                    "figure_id": f.figure_id,
+                    "value": f.value,
+                    "latest_year": f.latest_year,
+                    "distance": f.distance,
+                }
                 for f in figures
             ],
             metadata={"result_count": len(figures)},
@@ -113,7 +123,12 @@ def _lookup_output(figure: FigureResult | None) -> dict[str, Any]:
     """Trace output for an exact lookup. A miss is stated outright: the SDK drops None."""
     if figure is None:
         return {"found": False}
-    return {"found": True, "figure_id": figure.figure_id, "value": figure.value}
+    return {
+        "found": True,
+        "figure_id": figure.figure_id,
+        "value": figure.value,
+        "latest_year": figure.latest_year,
+    }
 
 
 def get_figure(
@@ -125,6 +140,13 @@ def get_figure(
         figure = _fetch_one(conn, _BY_KEY, (country_code, indicator_code, year))
         span.update(output=_lookup_output(figure))
     return figure
+
+
+def get_latest_year(conn: psycopg.Connection, country_code: str, indicator_code: str) -> int | None:
+    """Newest year with data for one country and indicator, or None if there is none."""
+    with conn.cursor() as cur:
+        row = cur.execute(_LATEST_YEAR, (country_code, indicator_code)).fetchone()
+    return row[0] if row else None
 
 
 def get_figure_by_id(conn: psycopg.Connection, figure_id: str) -> FigureResult | None:

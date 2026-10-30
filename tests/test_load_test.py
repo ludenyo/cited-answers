@@ -387,47 +387,153 @@ def test_main_applies_the_check_and_saves_a_results_file(
     assert "commit" in saved["meta"] and "saved_at" in saved["meta"]
 
 
-def test_compare_shows_before_and_after_side_by_side(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    years = {("KEN", "SP.POP.TOTL"): 2025}
-    before, after = tmp_path / "before.json", tmp_path / "after.json"
-    base = ["--repeats", "3", "--only", "latest-01"]
-    lt.main(
-        [*base, "--save", str(before)],
-        transport=_checked_server("KEN:SP.POP.TOTL:2024"),
-        latest_years=years,
-    )
-    lt.main(
-        [*base, "--save", str(after)],
-        transport=_checked_server("KEN:SP.POP.TOTL:2025"),
-        latest_years=years,
-    )
-    capsys.readouterr()
-
-    assert lt.main(["--compare", str(before), str(after)]) == 0
-
-    text = capsys.readouterr().out
-    row = next(line for line in text.splitlines() if line.startswith("latest-01"))
-    assert "0/3 -> 3/3" in row  # the stale-year check went from 0 of 3 to 3 of 3
-    assert "ALL" in text and "before: commit" in text and "after:  commit" in text
+def _row(
+    qid: str, ok: bool = True, matched: bool = True, pass_rate: float = 1.0, latest=None
+) -> dict:  # type: ignore[no-untyped-def]
+    return {"id": qid, "run": 1, "ok": ok, "as_expected": matched if ok else None,
+            "pass_rate": pass_rate if ok else None, "latest_ok": latest}  # fmt: skip
 
 
-def test_compare_sends_no_requests_and_only_covers_shared_questions(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    a = {
-        "meta": {},
-        "results": [
-            {**lt.result_to_dict(_result("q1", 1)), "id": "q1"},
-            {**lt.result_to_dict(_result("q2", 1)), "id": "q2"},
+def _run(
+    rows: list[dict], prompts: list[str], commit: str | None = None, dirty: bool = False
+) -> dict:
+    return {"meta": {"commit": commit, "dirty": dirty, "prompt_versions": prompts}, "results": rows}
+
+
+def test_compare_lines_up_flag_agreement_pass_rate_and_latest_year_for_each_run() -> None:
+    a = _run(
+        [
+            _row("q1", matched=False),
+            _row("q1", matched=False),
+            _row("q1"),
+            _row("q1", pass_rate=0.5),
         ],
-    }
-    b = {"meta": {}, "results": [{**lt.result_to_dict(_result("q1", 1)), "id": "q1"}]}
-    (tmp_path / "a.json").write_text(json.dumps(a))
-    (tmp_path / "b.json").write_text(json.dumps(b))
+        ["aaaa1111"],
+    )
+    b = _run([_row("q1"), _row("q1"), _row("q1"), _row("q1")], ["bbbb2222"], "abc1234", dirty=True)
 
-    lt.main(["--compare", str(tmp_path / "a.json"), str(tmp_path / "b.json")])  # no transport given
+    text = lt.compare_runs([("before", a), ("after", b)])
+
+    assert "A  before" in text and "B  after" in text
+    assert "prompt aaaa1111" in text and "prompt bbbb2222" in text  # each run's prompt hash
+    assert "abc1234 + uncommitted changes" in text
+    row = next(line for line in text.splitlines() if line.startswith("q1"))
+    assert "2/4" in row and "4/4" in row  # flag agreement went from 2 of 4 to 4 of 4
+    assert "0.88" in row and "1.00" in row  # mean pass rate (1+1+1+0.5)/4 = 0.875 -> 0.88
+
+
+def test_compare_handles_three_runs_and_the_latest_year_column() -> None:
+    stale = [_row("latest-01", latest=False)] * 2
+    fixed = [_row("latest-01", latest=True)] * 2
+    runs = [("a", _run(stale, ["p1"])), ("b", _run(fixed, ["p2"])), ("c", _run(fixed, ["p3"]))]
+
+    text = lt.compare_runs(runs)
+
+    row = next(line for line in text.splitlines() if line.startswith("latest-01"))
+    assert "0/2" in row and row.count("2/2") >= 4  # latest-year 0/2, 2/2, 2/2 plus flag columns
+    assert "C  c" in text
+
+
+def test_a_question_missing_from_one_run_shows_dashes_and_is_left_out_of_the_totals() -> None:
+    a = _run([_row("q1"), _row("q2", matched=False)], ["p1"])
+    b = _run([_row("q1")], ["p2"])
+
+    text = lt.compare_runs([("a", a), ("b", b)])
+
+    q2 = next(line for line in text.splitlines() if line.startswith("q2"))
+    assert "0/1" in q2 and " -" in q2
+    total = next(line for line in text.splitlines() if line.startswith("ALL"))
+    assert "ALL (1)" in total and "1/1" in total  # only q1 is in both runs
+
+
+def test_failed_requests_do_not_count_as_matches() -> None:
+    a = _run([_row("q1"), _row("q1", ok=False)], ["p1"])
+    b = _run([_row("q1")], ["p2"])
+    row = next(
+        line for line in lt.compare_runs([("a", a), ("b", b)]).splitlines() if line.startswith("q1")
+    )
+    assert "1/1" in row
+
+
+TEXT_RUN = "\n".join(
+    [
+        "uv run python scripts/load_test.py",
+        "Sending 4 requests (2 questions x 2) to http://localhost:8000, 2 at a time",
+        "[1/4] easy-01      run 1    5.0s  pass_rate=1.00  insufficient_data=False (as expected)",
+        "[2/4] vague-03     run 1    6.0s  pass_rate=1.00  insufficient_data=True "
+        "(DIFFERS from eval file)",
+        "[3/4] easy-01      run 2    4.0s  pass_rate=0.50  insufficient_data=False (as expected)"
+        "  latest_year=STALE",
+        "[4/4] vague-03     run 2  FAILED (HTTP 502) after 9.1s",
+        "",
+        "requests: 4  ok: 3  failed: 1",
+        "prompt versions seen: 61ba7831",
+        "",
+    ]
+)
+
+
+def test_a_run_saved_only_as_the_scripts_printed_text_can_be_read_back() -> None:
+    run = lt.parse_text_run(TEXT_RUN)
+
+    assert run["meta"]["prompt_versions"] == ["61ba7831"]
+    assert [r["id"] for r in run["results"]] == ["easy-01", "vague-03", "easy-01", "vague-03"]
+    vague = [r for r in run["results"] if r["id"] == "vague-03"]
+    assert vague[0]["as_expected"] is False and vague[0]["insufficient_data"] is True
+    assert vague[1]["ok"] is False  # the failed request is kept as a failure
+    easy = [r for r in run["results"] if r["id"] == "easy-01"]
+    assert [r["pass_rate"] for r in easy] == [1.0, 0.5]
+    assert easy[1]["latest_ok"] is False and easy[0]["latest_ok"] is None
+
+
+def test_the_real_baseline_file_parses_to_ninety_answers_and_its_summary(tmp_path: Path) -> None:
+    baseline = Path(__file__).parents[1] / "evals" / "results" / "baseline-load-test.txt"
+    run = lt.load_run(baseline)
+    assert len(run["results"]) == 90 and all(r["ok"] for r in run["results"])
+    assert run["meta"]["prompt_versions"] == ["61ba7831"]
+    vague03 = [r for r in run["results"] if r["id"] == "vague-03"]
+    assert [r["as_expected"] for r in vague03] == [False] * 5  # the 0/5 from the summary table
+    assert sum(r["as_expected"] is True for r in run["results"]) == 83  # the 83/90 line
+
+
+def test_load_run_reads_json_and_text_by_extension(tmp_path: Path) -> None:
+    saved = _run([_row("q1")], ["p1"], "abc")
+    (tmp_path / "r.json").write_text(json.dumps(saved))
+    (tmp_path / "r.txt").write_text(TEXT_RUN)
+    assert lt.load_run(tmp_path / "r.json") == saved
+    assert lt.load_run(tmp_path / "r.txt")["meta"]["source"] == "text"
+
+
+def test_main_compares_saved_runs_without_a_server(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    a, b = tmp_path / "a.txt", tmp_path / "b.json"
+    a.write_text(TEXT_RUN)
+    b.write_text(json.dumps(_run([_row("easy-01"), _row("vague-03")], ["new11111"], "abc1234")))
+
+    assert lt.main(["--compare", str(a), str(b)]) == 0  # no transport, no server
 
     text = capsys.readouterr().out
-    assert "q1" in text and "q2" not in text
+    assert "prompt 61ba7831" in text and "prompt new11111" in text
+    assert any(line.startswith("easy-01") for line in text.splitlines())
+
+
+def test_compare_needs_two_runs(tmp_path: Path) -> None:
+    only = tmp_path / "a.txt"
+    only.write_text(TEXT_RUN)
+    with pytest.raises(SystemExit, match="at least two"):
+        lt.main(["--compare", str(only)])
+
+
+def test_saved_runs_say_whether_the_working_tree_was_dirty(tmp_path: Path) -> None:
+    out = tmp_path / "run.json"
+    transport = _checked_server("KEN:SP.POP.TOTL:2025")
+    years = {("KEN", "SP.POP.TOTL"): 2025}
+    lt.main(
+        ["--repeats", "1", "--only", "latest-01", "--save", str(out)],
+        transport=transport,
+        latest_years=years,
+    )
+    meta = json.loads(out.read_text())["meta"]
+    assert meta["dirty"] in (True, False, None)
+    assert "commit" in meta
