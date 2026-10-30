@@ -7,6 +7,14 @@ on:
       - "prompts/**"
       - "config/**"
       - "evals/**"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "prompts/**"
+      - "config/**"
+      - "evals/**"
+  workflow_dispatch:
 
 concurrency:
   group: evals-${{ github.ref }}
