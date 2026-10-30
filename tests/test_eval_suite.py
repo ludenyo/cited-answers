@@ -2,7 +2,9 @@
 
 import importlib.util
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -314,3 +316,34 @@ def test_loading_the_fixture_replaces_whatever_figures_were_there(db: psycopg.Co
     assert db.execute("SELECT count(*) FROM figures WHERE id = 'X:Y:2000'").fetchone() == (0,)
     chunks = db.execute("SELECT count(*) FROM figure_chunks").fetchone()
     assert chunks == (count,)
+
+
+# ---- the eval environment checks -------------------------------------------------------
+
+ENV_SCRIPT = ROOT / "scripts" / "eval_env.sh"
+
+
+def _bash(snippet: str, **env: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", "-c", f"source {ENV_SCRIPT}; {snippet}"],
+        env={"PATH": os.environ["PATH"], **env},
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_a_trailing_newline_in_a_secret_is_removed_and_the_value_is_not_printed() -> None:
+    done = _bash('clean_env KEY; printf %s "$KEY"', KEY="sk-ant-abc\n")
+    assert done.stdout == "sk-ant-abc"
+    assert "KEY contained whitespace" in done.stderr and "sk-ant-abc" not in done.stderr
+
+
+def test_a_clean_secret_is_left_alone_and_silent() -> None:
+    done = _bash('clean_env KEY; printf %s "$KEY"', KEY="sk-ant-abc")
+    assert done.stdout == "sk-ant-abc" and done.stderr == ""
+
+
+def test_a_missing_secret_fails_with_a_clear_message() -> None:
+    done = _bash("require_env KEY")
+    assert done.returncode == 1 and "KEY is empty" in done.stderr
+    assert _bash("require_env KEY", KEY="x").returncode == 0
