@@ -11,7 +11,8 @@ from pgvector import Vector
 from psycopg.rows import dict_row
 
 from cited_answers.embeddings import embed_texts
-from cited_answers.models import FigureResult
+from cited_answers.models import FigureResult, IndicatorInfo
+from cited_answers.settings import get_app_config
 
 EmbedFn = Callable[[list[str]], list[list[float]]]
 
@@ -22,8 +23,15 @@ _SEARCH = f"""
 SELECT {_COLUMNS}, c.embedding <=> %(vec)s AS distance
 FROM figure_chunks c
 JOIN figures f ON f.id = c.figure_id
+WHERE (c.embedding <=> %(vec)s) <= %(max_distance)s
 ORDER BY c.embedding <=> %(vec)s
 LIMIT %(k)s
+"""
+
+_INDICATORS = """
+SELECT DISTINCT ON (indicator_code) indicator_code, indicator_name, unit
+FROM figures
+ORDER BY indicator_code
 """
 
 _BY_KEY = f"""
@@ -48,18 +56,32 @@ def _fetch_one(conn: psycopg.Connection, sql: str, params: tuple[Any, ...]) -> F
 def search_figures(
     conn: psycopg.Connection,
     question: str,
-    k: int = 10,
+    k: int | None = None,
+    max_distance: float | None = None,
     embed: EmbedFn = embed_texts,
 ) -> list[FigureResult]:
-    """The k figures whose sentence is closest to the question by cosine distance.
+    """Up to k figures closest to the question by cosine distance, none beyond max_distance.
 
-    The same embedding function and model as ingestion is used on purpose:
-    vectors from different models are not comparable.
+    k and max_distance default to retrieval.top_k and retrieval.max_distance in
+    config/app.yaml. The same embedding function and model as ingestion is used
+    on purpose: vectors from different models are not comparable.
     """
-    vector = Vector(embed([question])[0])
+    defaults = get_app_config().retrieval
+    params = {
+        "vec": Vector(embed([question])[0]),
+        "k": k if k is not None else defaults.top_k,
+        "max_distance": max_distance if max_distance is not None else defaults.max_distance,
+    }
     with conn.cursor(row_factory=dict_row) as cur:
-        rows = cur.execute(_SEARCH, {"vec": vector, "k": k}).fetchall()
+        rows = cur.execute(_SEARCH, params).fetchall()
     return [_to_figure(row) for row in rows]
+
+
+def list_indicators(conn: psycopg.Connection) -> list[IndicatorInfo]:
+    """Every indicator in the database, once each, ordered by code."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        rows = cur.execute(_INDICATORS).fetchall()
+    return [IndicatorInfo.model_validate(row) for row in rows]
 
 
 def get_figure(

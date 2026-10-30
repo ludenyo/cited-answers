@@ -28,13 +28,15 @@ cited-answers/
 │   ├── embeddings.py      # bge-small-en-v1.5 batch embedding (384 dims)
 │   ├── ingest_worldbank.py  # fetch, upsert and embed (idempotent)
 │   ├── models.py          # Claim, Answer, VerifiedClaim, AskResponse, FigureResult
-│   ├── settings.py        # ANTHROPIC_MODEL / ANTHROPIC_MAX_TOKENS from env
-│   ├── retrieval.py       # search_figures (pgvector cosine), get_figure, get_figure_by_id
+│   ├── settings.py        # env settings + typed config/app.yaml
+│   ├── retrieval.py       # search_figures (pgvector cosine), get_figure, get_figure_by_id, list_indicators
 │   ├── answer.py          # tool loop; the answer comes back via a submit_answer tool
 │   └── verify.py          # checks every claim against its cited figure
 ├── prompts/answer_system.md  # system prompt, versioned on its own
 ├── migrations/            # numbered SQL files
-├── config/indicators.yaml # countries, indicators, start year, unit overrides
+├── config/indicators.yaml # ingestion: countries, indicators, start year, unit overrides
+├── config/app.yaml        # retrieval, llm loop, verification tolerances, prompt file
+├── evals/questions_draft.yaml  # 18 draft eval questions (easy, compare, vague, trap), not yet run
 ├── tests/                 # pytest suite, mirrors the package
 ├── docker-compose.yml     # Postgres + pgvector
 ├── .env.example           # required env vars; copy to .env (gitignored)
@@ -47,7 +49,7 @@ cited-answers/
 ```
 make up       # start Postgres
 make down     # stop Postgres
-make test     # uv run pytest (DB tests skip unless TEST_DATABASE_URL is set)
+make test     # pytest, loading .env so the DB tests run (they skip without TEST_DATABASE_URL)
 make lint     # ruff check + ruff format --check
 make migrate  # apply SQL migrations
 make ingest   # migrate, then fetch World Bank data and embed it
@@ -60,6 +62,32 @@ The Docker database is published on host port **5435**, not the Postgres default
 and answers before Docker does, which looks like "role does not exist" errors.
 5433 and 5434 are taken by other local projects' databases, so 5435 is the next free one.
 `DATABASE_URL` and `TEST_DATABASE_URL` in `.env.example` use 5435 to match.
+
+## Model configuration
+
+- `ANTHROPIC_MODEL` is required and has no default. If it is missing the app refuses to
+  start with a clear error. `ANTHROPIC_MAX_TOKENS` defaults to 2048 because thinking
+  tokens count against it.
+- `config/app.yaml` has no `temperature` setting on purpose. Haiku 5.5 rejects any
+  non-default `temperature` (and `top_p` / `top_k`) with a 400, and the Anthropic SDK 2.x
+  has no such parameter. Output is steered from the prompt instead.
+- `search_figures` is the one tool without `strict: true`, because its optional `k`
+  input is not confirmed to work under strict schemas. The code clamps `k` to 20.
+
+## Claims
+
+Every number in an answer is a claim. A `figure` claim cites one stored figure and is
+checked against its value. A `derived` claim is computed from two figures listed as
+[from, to], and `verify.py` recomputes it from the stored values:
+
+- `difference` = to - from
+- `percent_change` = (to - from) / from * 100
+- `ratio` = from / to
+
+The sign follows the formula, so a fall is negative; a claim of +87.9 for a fall of
+87.9 fails on purpose. Both kinds use the tolerances in `config/app.yaml`. All `Claim`
+fields are required (null or empty when unused) so the strict `submit_answer` schema
+works. Text numbers are not parsed: only the claims list is verified.
 
 ## Rules
 

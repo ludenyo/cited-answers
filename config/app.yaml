@@ -1,5 +1,10 @@
-# Only the verification section exists so far. The retrieval, llm and answer
-# sections from the original spec are not wired up yet, so they are not listed here.
+retrieval:
+  top_k: 10
+  max_distance: 0.6          # cosine distance; drop results worse than this
+llm:
+  max_tool_iterations: 5
 verification:
-  abs_tolerance: 0.05      # for small values like percentages
-  rel_tolerance: 0.005     # 0.5%, for large values like population
+  abs_tolerance: 0.05        # for small values like percentages
+  rel_tolerance: 0.001       # 0.1%, for large values like population
+answer:
+  prompt_file: prompts/answer_system.md

@@ -4,14 +4,19 @@
 # so they need re-checking if the data is re-ingested. A claim passes verification
 # when its value is within max(abs_tolerance, rel_tolerance * |stored value|) of the
 # stored value. The tolerances live in config/app.yaml: currently 0.05 absolute and
-# 0.5% relative, so about 0.05 for percentages and about 277,000 for Kenya's population.
+# 0.1% relative, so about 0.05 for percentages and about 55,000 for Kenya's population.
 #
 # Fields:
-#   id, category        - easy | compare | trap
+#   id, category        - easy | compare | vague | trap
 #   question            - exactly what is sent to POST /ask
 #   expect.insufficient_data - what the Answer flag should be
 #   expect.figure_ids   - figures a correct answer should cite
 #   expect.values       - the numbers it should state (rounded as shown)
+#   expect.derived_claims - computed numbers, each a derived claim: operation, the two
+#                         source figure ids as [from, to], and the value. Definitions:
+#                         difference = to - from; percent_change = (to - from) / from * 100;
+#                         ratio = from / to. A fall is negative.
+#   todo                - open points that were not certain when this was drafted
 #   notes               - what a good answer does, and what would count as a failure
 
 questions:
@@ -32,7 +37,7 @@ questions:
       insufficient_data: false
       figure_ids: ["KEN:SP.POP.TOTL:2023"]
       values: {"KEN:SP.POP.TOTL:2023": 55339003}
-    notes: "Large value, so the relative tolerance applies: a claim within about 277,000 of 55339003 passes, for example 55300000. A claim value of 55.3 (rescaled to millions) still fails, because the claim value must be in the figure's own units."
+    notes: "Large value, so the relative tolerance applies: a claim within about 55,000 of 55339003 passes, for example 55300000. A claim value of 55.3 (rescaled to millions) still fails, because the claim value must be in the figure's own units."
 
   - id: easy-03
     category: easy
@@ -69,7 +74,11 @@ questions:
       insufficient_data: false
       figure_ids: ["KEN:FP.CPI.TOTL.ZG:2021", "KEN:FP.CPI.TOTL.ZG:2023"]
       values: {"KEN:FP.CPI.TOTL.ZG:2021": 6.11, "KEN:FP.CPI.TOTL.ZG:2023": 7.67}
-    notes: "Rose, from about 6.1% to 7.7%, roughly 1.6 points. Both source figures must be claims and the subtraction shown."
+      derived_claims:
+        - operation: difference
+          source_figure_ids: ["KEN:FP.CPI.TOTL.ZG:2021", "KEN:FP.CPI.TOTL.ZG:2023"]
+          value: 1.5635
+    notes: "Rose, from about 6.1% to 7.7%, by 1.56 points. Both source figures are figure claims and the 1.56 is a derived claim (difference). A claim of 1.56 passes against the recomputed 1.5635."
 
   - id: compare-02
     category: compare
@@ -90,7 +99,11 @@ questions:
       insufficient_data: false
       figure_ids: ["KEN:SP.POP.TOTL:2013", "KEN:SP.POP.TOTL:2023"]
       values: {"KEN:SP.POP.TOTL:2013": 44986791, "KEN:SP.POP.TOTL:2023": 55339003}
-    notes: "About 23.0%, from 44,986,791 to 55,339,003. The percentage itself is a computed number; a strict grader should see the two source figures as claims and the calculation in the text."
+      derived_claims:
+        - operation: percent_change
+          source_figure_ids: ["KEN:SP.POP.TOTL:2013", "KEN:SP.POP.TOTL:2023"]
+          value: 23.0117
+    notes: "About 23.0%, from 44,986,791 to 55,339,003. The percentage is a derived claim (percent_change); the two populations are figure claims. A claim of 23.0 passes against the recomputed 23.0117."
 
   - id: compare-04
     category: compare
@@ -108,7 +121,53 @@ questions:
       insufficient_data: false
       figure_ids: ["TZA:SH.DYN.MORT:2000", "TZA:SH.DYN.MORT:2022"]
       values: {"TZA:SH.DYN.MORT:2000": 128.0, "TZA:SH.DYN.MORT:2022": 40.1}
-    notes: "From about 128 to about 40.1 deaths per 1,000 live births, a fall of roughly 87.9, or about 69%."
+      derived_claims:
+        - operation: difference
+          source_figure_ids: ["TZA:SH.DYN.MORT:2000", "TZA:SH.DYN.MORT:2022"]
+          value: -87.9
+    todo:
+      - "The text may say 'fell by 87.9', but the derived claim value must be -87.9, because difference is to minus from. A claim of +87.9 fails verification; check how often the model gets the sign right."
+      - "A percent_change claim of -68.67 (about 69%) would also verify. Decide whether to allow it as an extra derived claim."
+    notes: "From about 128 to about 40.1 deaths per 1,000 live births, a fall of 87.9, or about 69%."
+
+  # ---- Vague: no indicator or year is named, so the model must use search_figures --
+  # Expected values are the latest year in the database. The questions name no year.
+  - id: vague-01
+    category: vague
+    question: "How connected are Kenyans to the internet and mobile phones?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["KEN:IT.NET.USER.ZS:2024", "KEN:IT.CEL.SETS.P2:2024"]
+      values: {"KEN:IT.NET.USER.ZS:2024": 34.98, "KEN:IT.CEL.SETS.P2:2024": 126.48}
+    todo:
+      - "Which years are acceptable? 2024 is the latest, but an earlier year is arguably a fair answer to a question that names none."
+      - "Must both indicators appear? Internet users alone is a partial answer."
+      - "Mobile subscriptions are per 100 people, so 126.48 means more subscriptions than people. A good answer states the unit and does not call it a percentage."
+      - "The response does not record which tools were called, so this eval cannot confirm search_figures was used."
+    notes: "About 35% of the population use the internet and there are about 126 mobile subscriptions per 100 people."
+
+  - id: vague-02
+    category: vague
+    question: "Is Tanzania mostly urban or rural?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["TZA:SP.URB.TOTL.IN.ZS:2025"]
+      values: {"TZA:SP.URB.TOTL.IN.ZS:2025": 36.88}
+    todo:
+      - "Any recent year of this indicator is under 50%, so the conclusion 'mostly rural' holds for all of them. Decide whether to accept years other than 2025."
+    notes: "Mostly rural: about 36.9% of the population is urban (2025). Fails if it says mostly urban or gives no figure."
+
+  - id: vague-03
+    category: vague
+    question: "How many Ugandans have power at home?"
+    expect:
+      insufficient_data: false
+      figure_ids: ["UGA:EG.ELC.ACCS.ZS:2024"]
+      values: {"UGA:EG.ELC.ACCS.ZS:2024": 55.3}
+    todo:
+      - "'Power at home' is a colloquial paraphrase of access to electricity. Confirm the search finds EG.ELC.ACCS.ZS; if it does not, the retrieval, not the model, needs work."
+      - "Which years are acceptable? The question names none."
+    notes: "About 55.3% of the population have access to electricity (2024). The answer is a share, not a head count; fails if it invents a number of people."
 
   # ---- Traps: the right behaviour is to refuse, correct or flag -------------
   - id: trap-01

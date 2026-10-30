@@ -6,8 +6,9 @@ up:
 down:
 	docker compose down
 
+# Loads .env when present so the database tests see TEST_DATABASE_URL instead of skipping.
 test:
-	uv run pytest
+	uv run $(if $(wildcard .env),--env-file .env,) pytest
 
 lint:
 	uv run ruff check .

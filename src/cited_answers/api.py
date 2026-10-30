@@ -1,7 +1,8 @@
 """FastAPI application and HTTP routes."""
 
 import logging
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from functools import partial
 from typing import Annotated
 
@@ -9,7 +10,7 @@ import anthropic
 from fastapi import Depends, FastAPI, HTTPException
 
 from cited_answers import retrieval
-from cited_answers.answer import ask, run_tool
+from cited_answers.answer import ask, load_system_prompt, run_tool
 from cited_answers.db import connect
 from cited_answers.models import AskRequest, AskResponse
 from cited_answers.settings import Settings, get_app_config
@@ -33,10 +34,34 @@ def get_ask_fn() -> AskFn:
                 run=partial(run_tool, conn),
                 lookup=partial(retrieval.get_figure_by_id, conn),
                 settings=Settings.from_env(),
-                verification=get_app_config().verification,
+                config=get_app_config(),
             )
 
     return _ask
+
+
+def configure_logging() -> None:
+    """Make this package's INFO logs visible under uvicorn.
+
+    Uvicorn configures only its own loggers, so without this the per-request
+    latency and token line would be dropped. Only our package logger is touched,
+    so third-party libraries keep their default (quiet) levels.
+    """
+    package_logger = logging.getLogger("cited_answers")
+    package_logger.setLevel(logging.INFO)
+    if not package_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        package_logger.addHandler(handler)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Fail at startup, with a clear message, if configuration is missing or broken."""
+    configure_logging()
+    Settings.from_env()  # raises SettingsError when ANTHROPIC_MODEL is unset
+    load_system_prompt(get_app_config().answer.prompt_path)  # raises if the file is gone
+    yield
 
 
 def create_app() -> FastAPI:
@@ -45,7 +70,7 @@ def create_app() -> FastAPI:
     A factory (rather than a module-level app) keeps tests free to build a
     fresh instance with their own settings later on.
     """
-    app = FastAPI(title="cited-answers")
+    app = FastAPI(title="cited-answers", lifespan=lifespan)
 
     @app.get("/health")
     def health() -> dict[str, str]:
