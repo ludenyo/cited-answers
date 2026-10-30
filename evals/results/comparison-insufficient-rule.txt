@@ -1,0 +1,33 @@
+runs:
+  A  before-latest-year             prompt 61ba7831   commit d228d73                            100 requests
+  B  after-latest-year              prompt f96fe4b3   commit d228d73 + uncommitted changes      100 requests
+  C  after-insufficient-rule        prompt f3b042ec   commit 7386f12 + uncommitted changes      100 requests
+
+flag agreement = answers whose insufficient_data matched the eval file (matched/answered)
+latest year = answers whose newest cited year was the newest in the database
+              (- when the question has no such check)
+
+question     flag agreement            pass rate                 latest year
+             A       B       C         A       B       C         A       B       C       
+easy-01      5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+easy-02      5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+easy-03      5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+easy-04      5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+easy-05      5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+compare-01   5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+compare-02   5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+compare-03   5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+compare-04   5/5     5/5     5/5       0.90    0.90    0.93      -       -       -       
+compare-05   5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+vague-01     5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+vague-02     5/5     5/5     5/5       1.00    0.90    1.00      -       -       -       
+vague-03     2/5     1/5     5/5       0.93    1.00    1.00      -       -       -       
+latest-01    5/5     5/5     5/5       1.00    1.00    1.00      5/5     5/5     5/5     
+latest-02    5/5     5/5     5/5       1.00    1.00    1.00      5/5     5/5     5/5     
+trap-01      5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+trap-02      2/5     3/5     5/5       1.00    1.00    1.00      -       -       -       
+trap-03      5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+trap-04      5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+trap-05      5/5     5/5     5/5       1.00    1.00    1.00      -       -       -       
+
+ALL (20)     94/100  94/100  100/100   0.99    0.99    1.00      10/10   10/10   10/10   

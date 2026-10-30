@@ -1,0 +1,133 @@
+uv run --env-file .env python scripts/load_test.py --concurrency 3 --save evals/results/after-insufficient-rule.json
+Sending 100 requests (20 questions x 5) to http://localhost:8765, 3 at a time
+[  1/100] easy-01      run 1    2.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[  2/100] easy-02      run 1    2.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[  3/100] easy-03      run 1    3.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[  4/100] easy-04      run 1    2.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[  5/100] easy-05      run 1    2.6s  pass_rate=1.00  insufficient_data=False (as expected)
+[  6/100] compare-01   run 1    6.6s  pass_rate=1.00  insufficient_data=False (as expected)
+[  7/100] compare-02   run 1    6.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[  8/100] compare-03   run 1    4.6s  pass_rate=1.00  insufficient_data=False (as expected)
+[  9/100] compare-04   run 1    5.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 10/100] compare-05   run 1   12.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 11/100] vague-01     run 1   12.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 12/100] vague-02     run 1    7.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 13/100] vague-03     run 1    5.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 14/100] latest-01    run 1    4.1s  pass_rate=1.00  insufficient_data=False (as expected)  latest_year=ok
+[ 15/100] latest-02    run 1    6.5s  pass_rate=1.00  insufficient_data=False (as expected)  latest_year=ok
+[ 16/100] trap-01      run 1    5.1s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 17/100] trap-02      run 1    5.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 18/100] trap-03      run 1    3.8s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 19/100] trap-04      run 1    3.9s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 20/100] trap-05      run 1    4.5s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 21/100] easy-01      run 2    3.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 22/100] easy-02      run 2    2.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 23/100] easy-03      run 2    2.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 24/100] easy-04      run 2    2.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 25/100] easy-05      run 2    2.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 26/100] compare-01   run 2    5.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 27/100] compare-02   run 2    5.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 28/100] compare-03   run 2    4.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 29/100] compare-04   run 2    4.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 30/100] compare-05   run 2    5.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 31/100] vague-01     run 2    5.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 32/100] vague-02     run 2    4.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 33/100] vague-03     run 2    4.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 34/100] latest-01    run 2    5.7s  pass_rate=1.00  insufficient_data=False (as expected)  latest_year=ok
+[ 35/100] latest-02    run 2    5.7s  pass_rate=1.00  insufficient_data=False (as expected)  latest_year=ok
+[ 36/100] trap-01      run 2    7.6s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 37/100] trap-02      run 2    5.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 38/100] trap-03      run 2    2.0s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 39/100] trap-04      run 2    4.4s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 40/100] trap-05      run 2    4.3s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 41/100] easy-01      run 3    2.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 42/100] easy-02      run 3    2.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 43/100] easy-03      run 3    2.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 44/100] easy-04      run 3    2.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 45/100] easy-05      run 3    2.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 46/100] compare-01   run 3    5.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 47/100] compare-02   run 3    5.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 48/100] compare-03   run 3    5.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 49/100] compare-04   run 3    4.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 50/100] compare-05   run 3    5.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 51/100] vague-01     run 3    6.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 52/100] vague-02     run 3    3.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 53/100] vague-03     run 3    5.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 54/100] latest-01    run 3    4.0s  pass_rate=1.00  insufficient_data=False (as expected)  latest_year=ok
+[ 55/100] latest-02    run 3    6.5s  pass_rate=1.00  insufficient_data=False (as expected)  latest_year=ok
+[ 56/100] trap-01      run 3    8.1s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 57/100] trap-02      run 3    3.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 58/100] trap-03      run 3    2.2s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 59/100] trap-04      run 3    3.6s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 60/100] trap-05      run 3    5.5s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 61/100] easy-01      run 4    2.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 62/100] easy-02      run 4    2.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 63/100] easy-03      run 4    2.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 64/100] easy-04      run 4    3.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 65/100] easy-05      run 4    2.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 66/100] compare-01   run 4    4.5s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 67/100] compare-02   run 4    5.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 68/100] compare-03   run 4    5.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 69/100] compare-04   run 4    4.7s  pass_rate=0.67  insufficient_data=False (as expected)
+[ 70/100] compare-05   run 4    5.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 71/100] vague-01     run 4    5.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 72/100] vague-02     run 4    4.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 73/100] vague-03     run 4    4.5s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 74/100] latest-01    run 4    3.9s  pass_rate=1.00  insufficient_data=False (as expected)  latest_year=ok
+[ 75/100] latest-02    run 4    6.1s  pass_rate=1.00  insufficient_data=False (as expected)  latest_year=ok
+[ 76/100] trap-01      run 4    4.1s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 77/100] trap-02      run 4    6.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 78/100] trap-03      run 4    2.4s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 79/100] trap-04      run 4    4.5s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 80/100] trap-05      run 4    4.5s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 81/100] easy-01      run 5    2.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 82/100] easy-02      run 5    3.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 83/100] easy-03      run 5    3.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 84/100] easy-04      run 5    3.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 85/100] easy-05      run 5    2.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 86/100] compare-01   run 5    5.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 87/100] compare-02   run 5    5.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 88/100] compare-03   run 5    4.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 89/100] compare-04   run 5    4.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 90/100] compare-05   run 5    4.5s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 91/100] vague-01     run 5    5.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 92/100] vague-02     run 5    4.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 93/100] vague-03     run 5    4.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 94/100] latest-01    run 5    3.7s  pass_rate=1.00  insufficient_data=False (as expected)  latest_year=ok
+[ 95/100] latest-02    run 5    4.4s  pass_rate=1.00  insufficient_data=False (as expected)  latest_year=ok
+[ 96/100] trap-01      run 5    7.5s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 97/100] trap-02      run 5    3.5s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 98/100] trap-03      run 5    2.6s  pass_rate=1.00  insufficient_data=True (as expected)
+[ 99/100] trap-04      run 5    3.8s  pass_rate=1.00  insufficient_data=True (as expected)
+[100/100] trap-05      run 5    5.0s  pass_rate=1.00  insufficient_data=True (as expected)
+
+question     ok     pass_rate  flag ok  latest  mean time  tokens in  tokens out
+easy-01       5/5        1.00   5/5        -       2.9s       4206        355
+easy-02       5/5        1.00   5/5        -       2.9s       4158        314
+easy-03       5/5        1.00   5/5        -       3.0s       4190        331
+easy-04       5/5        1.00   5/5        -       3.0s       4200        362
+easy-05       5/5        1.00   5/5        -       2.7s       4213        359
+compare-01    5/5        1.00   5/5        -       5.5s       6216        767
+compare-02    5/5        1.00   5/5        -       5.3s       4905        824
+compare-03    5/5        1.00   5/5        -       4.7s       7347        793
+compare-04    5/5        0.93   5/5        -       4.5s       4547        878
+compare-05    5/5        1.00   5/5        -       6.7s       9991        942
+vague-01      5/5        1.00   5/5        -       7.1s      15086        978
+vague-02      5/5        1.00   5/5        -       4.7s       8475        500
+vague-03      5/5        1.00   5/5        -       4.6s       8772        519
+latest-01     5/5        1.00   5/5      5/5       4.3s      11226        461
+latest-02     5/5        1.00   5/5      5/5       5.8s       8277        438
+trap-01       5/5        1.00   5/5        -       6.5s       7268        562
+trap-02       5/5        1.00   5/5        -       4.7s       5325        488
+trap-03       5/5        1.00   5/5        -       2.6s       2553        376
+trap-04       5/5        1.00   5/5        -       4.0s       9069        439
+trap-05       5/5        1.00   5/5        -       4.8s       8118        591
+
+requests: 100  ok: 100  failed: 0
+mean citation_pass_rate: 0.997
+insufficient_data matched the eval file: 100/100
+latest-year check passed: 10/10
+tokens: 690702 in, 56376 out
+prompt versions seen: f3b042ec
+
+Saved to evals/results/after-insufficient-rule.json

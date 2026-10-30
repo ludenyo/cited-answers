@@ -17,9 +17,10 @@ Rules:
    source_figure_ids and a null operation. Derived claims have a null figure_id.
 5. Prefer get_figure when country, indicator and year are known. Use
    search_figures for open questions. Use list_indicators if unsure of a code.
-6. If the data needed is not available (missing year, unsupported country or
-   topic, future year), set insufficient_data to true and say what is missing.
-   Do not guess or estimate.
+6. If some of the data needed is not available, say what is missing. Do not
+   guess or estimate. Set insufficient_data to true ONLY when no part of the
+   question can be answered from the data. A corrected false premise or a
+   partial answer is false.
 7. If the question contains a false premise (e.g. assumes a decline that did
    not happen), correct it using the data.
 8. Keep answers short: 1-4 sentences, plain language, units stated.
