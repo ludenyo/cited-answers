@@ -1,0 +1,118 @@
+uv run python scripts/load_test.py
+Sending 90 requests (18 questions x 5) to http://localhost:8000, 2 at a time
+[ 1/90] easy-01      run 1    5.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 2/90] easy-02      run 1    4.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 3/90] easy-03      run 1    2.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 4/90] easy-04      run 1   13.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 5/90] easy-05      run 1   10.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 6/90] compare-01   run 1    4.6s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 7/90] compare-02   run 1    4.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 8/90] compare-03   run 1    4.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[ 9/90] compare-04   run 1    4.6s  pass_rate=1.00  insufficient_data=False (as expected)
+[10/90] compare-05   run 1    7.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[11/90] vague-01     run 1    6.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[12/90] vague-02     run 1    2.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[13/90] vague-03     run 1    8.5s  pass_rate=1.00  insufficient_data=True (DIFFERS from eval file)
+[14/90] trap-01      run 1    4.4s  pass_rate=1.00  insufficient_data=True (as expected)
+[15/90] trap-02      run 1    4.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[16/90] trap-03      run 1    1.7s  pass_rate=1.00  insufficient_data=True (as expected)
+[17/90] trap-04      run 1    5.1s  pass_rate=1.00  insufficient_data=True (as expected)
+[18/90] trap-05      run 1    5.5s  pass_rate=1.00  insufficient_data=True (as expected)
+[19/90] easy-01      run 2    3.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[20/90] easy-02      run 2    3.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[21/90] easy-03      run 2    2.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[22/90] easy-04      run 2    4.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[23/90] easy-05      run 2    3.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[24/90] compare-01   run 2    5.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[25/90] compare-02   run 2    4.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[26/90] compare-03   run 2    4.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[27/90] compare-04   run 2    4.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[28/90] compare-05   run 2    6.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[29/90] vague-01     run 2    5.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[30/90] vague-02     run 2    3.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[31/90] vague-03     run 2    5.1s  pass_rate=1.00  insufficient_data=True (DIFFERS from eval file)
+[32/90] trap-01      run 2    3.6s  pass_rate=1.00  insufficient_data=True (as expected)
+[33/90] trap-02      run 2    3.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[34/90] trap-03      run 2    1.7s  pass_rate=1.00  insufficient_data=True (as expected)
+[35/90] trap-04      run 2    4.0s  pass_rate=1.00  insufficient_data=True (as expected)
+[36/90] trap-05      run 2    5.0s  pass_rate=1.00  insufficient_data=True (as expected)
+[37/90] easy-01      run 3    3.6s  pass_rate=1.00  insufficient_data=False (as expected)
+[38/90] easy-02      run 3    3.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[39/90] easy-03      run 3    3.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[40/90] easy-04      run 3    2.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[41/90] easy-05      run 3    2.5s  pass_rate=1.00  insufficient_data=False (as expected)
+[42/90] compare-01   run 3    4.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[43/90] compare-02   run 3    4.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[44/90] compare-03   run 3    4.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[45/90] compare-04   run 3    5.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[46/90] compare-05   run 3    8.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[47/90] vague-01     run 3    5.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[48/90] vague-02     run 3    2.6s  pass_rate=1.00  insufficient_data=False (as expected)
+[49/90] vague-03     run 3    4.9s  pass_rate=1.00  insufficient_data=True (DIFFERS from eval file)
+[50/90] trap-01      run 3    4.0s  pass_rate=1.00  insufficient_data=True (as expected)
+[51/90] trap-02      run 3    3.7s  pass_rate=1.00  insufficient_data=True (DIFFERS from eval file)
+[52/90] trap-03      run 3    1.7s  pass_rate=1.00  insufficient_data=True (as expected)
+[53/90] trap-04      run 3    4.3s  pass_rate=1.00  insufficient_data=True (as expected)
+[54/90] trap-05      run 3    7.3s  pass_rate=1.00  insufficient_data=True (as expected)
+[55/90] easy-01      run 4    3.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[56/90] easy-02      run 4    4.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[57/90] easy-03      run 4    3.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[58/90] easy-04      run 4    2.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[59/90] easy-05      run 4    2.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[60/90] compare-01   run 4    4.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[61/90] compare-02   run 4    4.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[62/90] compare-03   run 4    4.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[63/90] compare-04   run 4    6.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[64/90] compare-05   run 4    7.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[65/90] vague-01     run 4    5.1s  pass_rate=1.00  insufficient_data=False (as expected)
+[66/90] vague-02     run 4    2.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[67/90] vague-03     run 4    6.0s  pass_rate=1.00  insufficient_data=True (DIFFERS from eval file)
+[68/90] trap-01      run 4    2.5s  pass_rate=1.00  insufficient_data=True (as expected)
+[69/90] trap-02      run 4    3.4s  pass_rate=1.00  insufficient_data=True (DIFFERS from eval file)
+[70/90] trap-03      run 4    2.8s  pass_rate=1.00  insufficient_data=True (as expected)
+[71/90] trap-04      run 4    4.4s  pass_rate=1.00  insufficient_data=True (as expected)
+[72/90] trap-05      run 4    5.4s  pass_rate=1.00  insufficient_data=True (as expected)
+[73/90] easy-01      run 5    3.3s  pass_rate=1.00  insufficient_data=False (as expected)
+[74/90] easy-02      run 5    3.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[75/90] easy-03      run 5    3.2s  pass_rate=1.00  insufficient_data=False (as expected)
+[76/90] easy-04      run 5    2.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[77/90] easy-05      run 5    2.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[78/90] compare-01   run 5    4.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[79/90] compare-02   run 5    4.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[80/90] compare-03   run 5    3.8s  pass_rate=1.00  insufficient_data=False (as expected)
+[81/90] compare-04   run 5    4.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[82/90] compare-05   run 5    7.4s  pass_rate=1.00  insufficient_data=False (as expected)
+[83/90] vague-01     run 5    5.0s  pass_rate=1.00  insufficient_data=False (as expected)
+[84/90] vague-02     run 5    7.9s  pass_rate=1.00  insufficient_data=False (as expected)
+[85/90] vague-03     run 5    5.5s  pass_rate=1.00  insufficient_data=True (DIFFERS from eval file)
+[86/90] trap-01      run 5    5.7s  pass_rate=1.00  insufficient_data=True (as expected)
+[87/90] trap-02      run 5    3.7s  pass_rate=1.00  insufficient_data=False (as expected)
+[88/90] trap-03      run 5    1.8s  pass_rate=1.00  insufficient_data=True (as expected)
+[89/90] trap-04      run 5    4.7s  pass_rate=1.00  insufficient_data=True (as expected)
+[90/90] trap-05      run 5    5.5s  pass_rate=1.00  insufficient_data=True (as expected)
+
+question     ok     pass_rate  flag ok  mean time  tokens in  tokens out
+easy-01       5/5        1.00   5/5        3.8s       8067        367
+easy-02       5/5        1.00   5/5        3.8s       4047        314
+easy-03       5/5        1.00   5/5        3.0s       6476        360
+easy-04       5/5        1.00   5/5        5.2s       4389        317
+easy-05       5/5        1.00   5/5        4.4s       4925        323
+compare-01    5/5        1.00   5/5        4.9s       8470        776
+compare-02    5/5        1.00   5/5        4.2s       4776        769
+compare-03    5/5        1.00   5/5        4.4s       5181        768
+compare-04    5/5        1.00   5/5        5.1s       5223        977
+compare-05    5/5        1.00   5/5        7.4s      10060        988
+vague-01      5/5        1.00   5/5        5.4s      14288        877
+vague-02      5/5        1.00   5/5        3.9s       7034        528
+vague-03      5/5        1.00   0/5        6.0s      10540        774
+trap-01       5/5        1.00   5/5        4.0s       4403        363
+trap-02       5/5        1.00   3/5        3.7s       5152        487
+trap-03       5/5        1.00   5/5        2.0s       2483        220
+trap-04       5/5        1.00   5/5        4.5s       8838        472
+trap-05       5/5        1.00   5/5        5.7s       7855        468
+
+requests: 90  ok: 90  failed: 0
+mean citation_pass_rate: 1.000
+insufficient_data matched the eval file: 83/90
+tokens: 611028 in, 50734 out
+prompt versions seen: 61ba7831
