@@ -22,3 +22,8 @@ def embed_texts(texts: list[str], batch_size: int = 64) -> list[list[float]]:
         return []
     vectors = _model().encode(texts, batch_size=batch_size, normalize_embeddings=True)
     return [vector.tolist() for vector in vectors]
+
+
+def warm_up() -> None:
+    """Load the model now rather than on the first question."""
+    _model()

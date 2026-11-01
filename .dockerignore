@@ -1,0 +1,35 @@
+# Secrets and local environment
+.env
+.env.*
+.neon
+.claude
+skills-lock.json
+
+# Not needed at runtime
+.git
+.github
+.venv
+node_modules
+tests
+evals
+scripts
+docs
+*.md
+!README.md
+Dockerfile
+.dockerignore
+docker-compose.yml
+Makefile
+package.json
+package-lock.json
+neon.ts
+
+# Caches and build output
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.promptfoo
+dist
+build

@@ -3,8 +3,9 @@
 Input:   classify_question labels a question in_scope, out_of_scope or suspicious.
 Output:  failed claims are fed back for one retry; if they still fail they are dropped
          and the answer is marked partial.
-Limits:  a whole-request Deadline, and a per-IP RateLimiter. The iteration and output
-         token limits are enforced by the loop in answer.py using the messages here.
+Limits:  a whole-request Deadline, a per-IP RateLimiter and a global DailyCap. The
+         iteration and output token limits are enforced by the loop in answer.py using
+         the messages here.
 
 Every trigger is recorded as a Langfuse event by record_trigger, and also logged.
 """
@@ -41,6 +42,7 @@ LIMIT_ITERATIONS = "limit_iterations"
 LIMIT_TIMEOUT = "limit_timeout"
 LIMIT_OUTPUT_TOKENS = "limit_output_tokens"
 RATE_LIMITED = "rate_limited"
+DAILY_CAP_REACHED = "daily_cap_reached"
 
 EVENT_NAME = "guardrail-triggered"
 MAX_LISTED = 5  # claims named in a retry message or a partial-answer explanation
@@ -152,6 +154,35 @@ class RateLimiter:
             self._expire(self._hits[key], now)
             if not self._hits[key]:
                 del self._hits[key]
+
+
+class DailyCap:
+    """At most `limit` calls per UTC day across every client, kept in memory.
+
+    Counts reset at UTC midnight. Each server process keeps its own count, so with
+    several instances the real ceiling is limit x instances.
+    """
+
+    SECONDS_PER_DAY = 86_400
+
+    def __init__(self, limit: int, clock: Callable[[], float] = time.time) -> None:
+        self._limit = limit
+        self._clock = clock
+        self._day = -1
+        self._count = 0
+        self._lock = threading.Lock()
+
+    def take(self) -> float | None:
+        """None if the call is allowed (and counted), else seconds until the cap resets."""
+        now = self._clock()
+        day = int(now // self.SECONDS_PER_DAY)
+        with self._lock:
+            if day != self._day:
+                self._day, self._count = day, 0
+            if self._count >= self._limit:
+                return (day + 1) * self.SECONDS_PER_DAY - now
+            self._count += 1
+            return None
 
 
 def client_fingerprint(client_id: str) -> str:

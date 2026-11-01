@@ -112,3 +112,46 @@ def load_app_config(path: Path = APP_CONFIG_FILE) -> AppConfig:
 def get_app_config() -> AppConfig:
     """The shipped config, read once per process."""
     return load_app_config()
+
+
+# ---- demo protections --------------------------------------------------------------------
+# Environment overrides for a public deployment. Unset means "use config/app.yaml" (rate
+# limit) or "no cap" (daily cap), so local development is unchanged.
+
+
+def _env_number(name: str, kind: type[int] | type[float], minimum: float) -> float | None:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = kind(raw)
+    except ValueError:
+        raise SettingsError(f"{name} must be a number, got {raw!r}.") from None
+    if value < minimum:
+        raise SettingsError(f"{name} must be at least {minimum:g}, got {raw}.")
+    return value
+
+
+def rate_limit_from_env(base: RateLimitConfig) -> RateLimitConfig:
+    """The per-IP limit: RATE_LIMIT_REQUESTS per RATE_LIMIT_WINDOW_SECONDS, else the config."""
+    requests = _env_number("RATE_LIMIT_REQUESTS", int, 1)
+    window = _env_number("RATE_LIMIT_WINDOW_SECONDS", float, 1)
+    return RateLimitConfig(
+        requests=int(requests) if requests is not None else base.requests,
+        window_seconds=window if window is not None else base.window_seconds,
+    )
+
+
+def daily_ask_cap_from_env() -> int | None:
+    """DAILY_ASK_CAP: most /ask calls per UTC day across all clients. None means no cap."""
+    cap = _env_number("DAILY_ASK_CAP", int, 0)
+    return int(cap) if cap else None  # 0 or unset: no cap
+
+
+def trusted_proxy_hops() -> int:
+    """TRUST_PROXY_HOPS: how many proxies in front of the app append to X-Forwarded-For.
+
+    0 (the default) ignores the header, which is right when clients connect directly.
+    Cloud Run without a load balancer in front is 1.
+    """
+    return int(_env_number("TRUST_PROXY_HOPS", int, 0) or 0)

@@ -20,7 +20,8 @@ came from, so a reader can verify each figure against its source.
 ```
 cited-answers/
 ├── src/cited_answers/     # application package (src layout)
-│   ├── api.py             # FastAPI app factory and routes
+│   ├── api.py             # FastAPI app factory, routes, demo limits (rate limit, daily cap)
+│   ├── static/index.html  # the demo page served at / (plain HTML and JS, no build)
 │   ├── db.py              # Postgres connection from DATABASE_URL
 │   ├── migrate.py         # applies migrations/*.sql once each
 │   ├── figures.py         # Figure record, id, unit and sentence helpers
@@ -49,6 +50,7 @@ cited-answers/
 ├── .github/workflows/evals.yml  # runs the suite on pull requests; fails on any hard gate
 ├── tests/                 # pytest suite, mirrors the package
 ├── docker-compose.yml     # Postgres + pgvector
+├── Dockerfile             # demo image for Cloud Run (see Public demo)
 ├── .env.example           # required env vars; copy to .env (gitignored)
 ├── Makefile               # the commands below
 └── pyproject.toml         # deps, ruff and pytest config
@@ -160,6 +162,102 @@ Two scores go on every trace: `citation_pass_rate` (numeric) and `insufficient_d
 - Not done: prompts are files in this repo, not Langfuse-managed, so traces are not linked
   to a Langfuse prompt object. There is no `user_id` (no auth) or `session_id` (single
   turn). Thinking text is omitted by default on Haiku 5.5, so generations carry none.
+
+## Public demo on Google Cloud Run
+
+`GET /` serves a plain HTML page (question box, example questions, the answer, and each
+claim with its figure and a link to its source). The `Dockerfile` builds a small image for
+Cloud Run: Python 3.12 slim, CPU-only torch, the `bge-small-en-v1.5` model baked in, a
+non-root user, and `uvicorn` on `$PORT`.
+
+Try it locally (the image reads the same variables as `.env`):
+
+```
+docker build -t cited-answers .
+docker run --rm -p 8080:8080 --env-file .env -e ANTHROPIC_MODEL=claude-haiku-5-5 cited-answers
+# then open http://localhost:8080
+```
+
+### Demo protections
+
+All are environment variables. The image defaults to the values shown; with none set (local
+development) the per-IP limit comes from `config/app.yaml` and there is no daily cap.
+
+| Variable | Image default | Meaning |
+| --- | --- | --- |
+| `RATE_LIMIT_REQUESTS` | 10 | Questions allowed per client IP ... |
+| `RATE_LIMIT_WINDOW_SECONDS` | 3600 | ... in this many seconds. Over it: 429 with `Retry-After`. |
+| `DAILY_ASK_CAP` | 300 | `/ask` calls per UTC day across everyone. Over it: 429 "Demo limit reached". `0` or unset: no cap. |
+| `TRUST_PROXY_HOPS` | 1 | Proxies that append to `X-Forwarded-For`. Cloud Run is 1. `0` ignores the header. |
+| `WARM_EMBEDDING_MODEL` | true | Load the embedding model at startup, so the first question is not slow. |
+
+Questions are limited to 500 characters. Langfuse tracing is off unless both
+`LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set.
+
+The limits are counted in memory, per instance. With `--max-instances 2` the real ceilings
+are up to twice the numbers above (600 questions a day), and a client's allowance can reset
+when a request lands on a new instance. That bounds the cost, which is the point. If you
+need exact global counts, move the counters into Postgres.
+
+### Deploy
+
+The data must already be in the database the demo will use: run `DATABASE_URL=... make ingest`
+once against it (for Neon, the pooled connection string). Then, replacing the first two values:
+
+```
+export PROJECT_ID=your-gcp-project
+export REGION=europe-west2          # close to your database
+export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/cited-answers/app:latest
+
+gcloud config set project $PROJECT_ID
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com secretmanager.googleapis.com
+
+# Secrets. Read the values from your shell so they never land in a file.
+printf %s "$ANTHROPIC_API_KEY" | gcloud secrets create ANTHROPIC_API_KEY --data-file=-
+printf %s "$DATABASE_URL"      | gcloud secrets create DATABASE_URL --data-file=-
+
+# Let the service's runtime account read them (the default Compute Engine account here).
+RUNTIME_SA=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')-compute@developer.gserviceaccount.com
+for secret in ANTHROPIC_API_KEY DATABASE_URL; do
+  gcloud secrets add-iam-policy-binding $secret \
+    --member="serviceAccount:$RUNTIME_SA" --role=roles/secretmanager.secretAccessor
+done
+
+# Build in Cloud Build (linux/amd64) and push to Artifact Registry.
+gcloud artifacts repositories create cited-answers --repository-format=docker --location=$REGION
+gcloud builds submit --tag $IMAGE .
+
+gcloud run deploy cited-answers \
+  --image $IMAGE \
+  --region $REGION \
+  --allow-unauthenticated \
+  --memory 2Gi \
+  --cpu-boost \
+  --min-instances 0 \
+  --max-instances 2 \
+  --timeout 60 \
+  --set-env-vars ANTHROPIC_MODEL=claude-haiku-5-5 \
+  --set-secrets ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,DATABASE_URL=DATABASE_URL:latest
+```
+
+`gcloud run deploy` prints the service URL. Check it with `curl $URL/health`, then open it.
+
+`gcloud builds submit` uploads the directory minus what `.gitignore` excludes (so not `.env`),
+and the build applies `.dockerignore` as well.
+
+To change a limit without rebuilding:
+
+```
+gcloud run services update cited-answers --region $REGION \
+  --update-env-vars DAILY_ASK_CAP=100,RATE_LIMIT_REQUESTS=5
+```
+
+To turn on Langfuse, store the two keys as secrets the same way and add
+`--update-secrets LANGFUSE_PUBLIC_KEY=LANGFUSE_PUBLIC_KEY:latest,LANGFUSE_SECRET_KEY=LANGFUSE_SECRET_KEY:latest`
+and `--update-env-vars LANGFUSE_HOST=https://cloud.langfuse.com`.
+
+To take the demo down: `gcloud run services delete cited-answers --region $REGION`.
 
 ## Rules
 

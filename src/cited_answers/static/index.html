@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cited-answers</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafaf8; --fg: #1c1c1a; --muted: #62625c; --card: #fff; --line: #deded8;
+    --accent: #1a5fb4; --ok: #1b6e3c; --bad: #a3231b; --warn: #8a5a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614; --fg: #ececE6; --muted: #a2a29a; --card: #1f1f1c; --line: #3a3a35;
+      --accent: #7fb0ee; --ok: #6cc38a; --bad: #f08a82; --warn: #e0b45a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { margin: 0 0 .25rem; font-size: 1.6rem; }
+  .lede { margin: 0 0 1.5rem; color: var(--muted); }
+  textarea { width: 100%; min-height: 5rem; padding: .7rem; resize: vertical; font: inherit;
+             color: inherit; background: var(--card); border: 1px solid var(--line);
+             border-radius: .5rem; }
+  textarea:focus-visible, button:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+         margin-top: .5rem; }
+  .count { color: var(--muted); font-size: .85rem; }
+  button { font: inherit; cursor: pointer; border-radius: .5rem; border: 1px solid var(--line);
+           background: var(--card); color: inherit; padding: .4rem .8rem; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { button.primary { color: #0b1a2e; } }
+  button:disabled { opacity: .55; cursor: progress; }
+  .examples { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 1.5rem; }
+  .examples button { font-size: .9rem; text-align: left; }
+  #result { margin-top: 1.5rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: .6rem;
+          padding: 1rem 1.1rem; margin-bottom: 1rem; }
+  .card h2 { margin: 0 0 .5rem; font-size: 1rem; color: var(--muted); font-weight: 600; }
+  .answer { white-space: pre-wrap; margin: 0; }
+  .notice { border-left: 4px solid var(--warn); }
+  .error { border-left: 4px solid var(--bad); }
+  .claims { list-style: none; margin: 0; padding: 0; }
+  .claims li { padding: .7rem 0; border-top: 1px solid var(--line); }
+  .claims li:first-child { border-top: 0; padding-top: 0; }
+  .statement { margin: 0 0 .25rem; }
+  .meta { color: var(--muted); font-size: .85rem; word-break: break-word; }
+  .badge { font-size: .75rem; font-weight: 600; margin-right: .4rem; }
+  .badge.ok { color: var(--ok); } .badge.bad { color: var(--bad); }
+  code { font-size: .85em; }
+  footer { margin-top: 2rem; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>cited-answers</h1>
+  <p class="lede">Ask about development indicators for Kenya, Uganda and Tanzania. Every
+    number in the answer is checked against a World Bank figure, and you can open the
+    source behind each one.</p>
+
+  <form id="form">
+    <label for="question" class="count">Your question</label>
+    <textarea id="question" maxlength="500" required
+              placeholder="e.g. What was Kenya's GDP growth in 2023?"></textarea>
+    <div class="row">
+      <span class="count"><span id="chars">0</span> / 500</span>
+      <button type="submit" class="primary" id="submit">Ask</button>
+    </div>
+  </form>
+
+  <div class="examples" id="examples" aria-label="Example questions"></div>
+
+  <div id="result" aria-live="polite"></div>
+
+  <footer>A demo with usage limits. Answers come from World Bank data for Kenya, Uganda
+    and Tanzania only; the language model can be wrong, so check the sources.</footer>
+</main>
+
+<script>
+(() => {
+  const EXAMPLES = [
+    "What was Kenya's GDP growth in 2023?",
+    "How has life expectancy changed in Uganda since 2000?",
+    "Compare internet users in Kenya and Tanzania in the latest year.",
+    "What share of Tanzania's population had access to electricity in 2022?",
+    "How much did Kenya's under-5 mortality fall between 2000 and 2020?",
+  ];
+  const form = document.getElementById("form");
+  const box = document.getElementById("question");
+  const chars = document.getElementById("chars");
+  const submit = document.getElementById("submit");
+  const result = document.getElementById("result");
+
+  // Everything below builds DOM nodes with textContent. Model output is never parsed as HTML.
+  function el(tag, props = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props)) {
+      if (key === "text") node.textContent = value;
+      else if (key === "class") node.className = value;
+      else node.setAttribute(key, value);
+    }
+    node.append(...children);
+    return node;
+  }
+
+  function sourceLink(url) {
+    let parsed;
+    try { parsed = new URL(url); } catch { return null; }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    return el("a", { href: parsed.href, target: "_blank", rel: "noopener noreferrer",
+                     text: "Source" });
+  }
+
+  function format(n) {
+    return Number.isFinite(n) ? Number(n.toPrecision(10)).toLocaleString("en-US") : String(n);
+  }
+
+  function claimItem(claim) {
+    const li = el("li");
+    li.append(el("p", { class: "statement", text: claim.statement }));
+    const meta = el("div", { class: "meta" });
+    meta.append(el("span", { class: "badge " + (claim.passed ? "ok" : "bad"),
+                             text: claim.passed ? "✓ verified" : "✗ not verified" }));
+    if (claim.kind === "derived") {
+      const op = (claim.operation || "").replace("_", " ");
+      meta.append(`Computed (${op}) from `);
+      claim.source_figure_ids.forEach((id, i) => {
+        if (i) meta.append(" and ");
+        meta.append(el("code", { text: id }));
+      });
+      if (claim.actual_value !== null) meta.append(`. Recomputed value: ${format(claim.actual_value)}`);
+    } else {
+      meta.append("Figure ", el("code", { text: claim.figure_id }));
+      if (claim.actual_value !== null) meta.append(`, stored value ${format(claim.actual_value)}`);
+    }
+    if (claim.reason) meta.append(` (${claim.reason})`);
+    for (const url of claim.source_urls || []) {
+      const link = sourceLink(url);
+      if (link) meta.append(" · ", link);
+    }
+    li.append(meta);
+    return li;
+  }
+
+  function showError(message) {
+    result.replaceChildren(el("div", { class: "card error" }, el("p", { class: "answer", text: message })));
+  }
+
+  function showAnswer(data) {
+    const nodes = [];
+    nodes.push(el("div", { class: "card" }, el("h2", { text: "Answer" }),
+                  el("p", { class: "answer", text: data.answer })));
+    if (data.partial_answer && data.partial_answer_explanation) {
+      nodes.push(el("div", { class: "card notice" },
+                    el("p", { class: "answer", text: data.partial_answer_explanation })));
+    }
+    if (data.claims.length) {
+      const list = el("ul", { class: "claims" }, ...data.claims.map(claimItem));
+      nodes.push(el("div", { class: "card" }, el("h2", { text: "Figures behind the answer" }), list));
+    }
+    result.replaceChildren(...nodes);
+  }
+
+  async function ask(question) {
+    submit.disabled = true;
+    result.replaceChildren(el("p", { class: "count", text: "Looking up the figures…" }));
+    try {
+      const response = await fetch("/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (response.ok) return showAnswer(body);
+      if (response.status === 422) return showError("Please enter a question of 1 to 500 characters.");
+      if (typeof body.detail === "string") return showError(body.detail);
+      showError("Something went wrong. Please try again.");
+    } catch {
+      showError("Could not reach the server. Please try again.");
+    } finally {
+      submit.disabled = false;
+    }
+  }
+
+  box.addEventListener("input", () => { chars.textContent = box.value.length; });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const question = box.value.trim();
+    if (question) ask(question);
+  });
+  for (const text of EXAMPLES) {
+    const button = el("button", { type: "button", text });
+    button.addEventListener("click", () => {
+      box.value = text;
+      chars.textContent = text.length;
+      ask(text);
+    });
+    document.getElementById("examples").append(button);
+  }
+})();
+</script>
+</body>
+</html>
