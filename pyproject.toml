@@ -2,7 +2,7 @@
 name = "cited-answers"
 version = "0.1.0"
 description = "Answers questions about Kenyan World Bank development indicators, citing the database row behind every number."
-readme = "CLAUDE.md"
+readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "anthropic>=2.3.0",
