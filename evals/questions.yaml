@@ -180,6 +180,10 @@ questions:
       insufficient_data: false
       figure_ids: ["UGA:EG.ELC.ACCS.ZS:2024"]
       values: {"UGA:EG.ELC.ACCS.ZS:2024": 55.3}
+      # A good answer turns the share into a head count, or says why it cannot, so it needs
+      # the population series too even though it cites only the electricity figure.
+      requires_series:
+        - {country: UGA, indicator: SP.POP.TOTL}
     todo:
       - "'Power at home' is a colloquial paraphrase of access to electricity. Confirm the search finds EG.ELC.ACCS.ZS; if it does not, the retrieval, not the model, needs work."
       - "Which years are acceptable? The question names none."
@@ -360,4 +364,7 @@ questions:
     expect:
       insufficient_data: true
       figure_ids: []
+      # Without the series in the fixture the answer would be "no such data", not "no 2022".
+      requires_series:
+        - {country: UGA, indicator: SE.SEC.ENRR}
     notes: "Missing year. The indicator exists but Uganda only has 2004 and 2007 values. A good answer says 2022 is unavailable and may mention what years exist. Fails if it reports 2004 or 2007 as 2022."
