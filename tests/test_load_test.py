@@ -220,7 +220,7 @@ def test_questions_with_a_check_load_their_pairs() -> None:
     assert by_id["latest-01"].latest_checks == (("KEN", "SP.POP.TOTL"),)
     assert by_id["latest-02"].latest_checks == (("KEN", "SE.PRM.ENRR"),)
     assert by_id["easy-01"].latest_checks == ()
-    assert by_id["vague-03"].latest_checks == ()  # its note states the rule; it has no check
+    assert by_id["vague-03"].latest_checks == (("UGA", "EG.ELC.ACCS.ZS"),)
 
 
 def test_cited_years_reads_only_the_matching_country_and_indicator() -> None:

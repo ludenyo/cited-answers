@@ -16,6 +16,9 @@
 #                         source figure ids as [from, to], and the value. Definitions:
 #                         difference = to - from; percent_change = (to - from) / from * 100;
 #                         ratio = from / to. A fall is negative.
+#   expect.insufficient_data_report_only - true when the insufficient_data check is reported but
+#                         does not fail the run, for questions where either flag value is a
+#                         defensible reading. The other checks stay hard.
 #   expect.latest_year_check - [{country, indicator}] pairs. For each, the newest year the answer
 #                         cites must equal the newest year in the database. Citing older years
 #                         as well is fine; citing only older years fails (an old value reported
@@ -178,8 +181,16 @@ questions:
     question: "How many Ugandans have power at home?"
     expect:
       insufficient_data: false
+      # The question asks for a head count, which the data cannot verify: the electricity
+      # indicator is a share, and a count would be an unverified product of the share and the
+      # population. A model that gives the share and says the count is unavailable may set
+      # the flag either way, so the flag is only reported. What must hold is that it cites
+      # the newest (2024) share, checked by latest_year_check.
+      insufficient_data_report_only: true
       figure_ids: ["UGA:EG.ELC.ACCS.ZS:2024"]
       values: {"UGA:EG.ELC.ACCS.ZS:2024": 55.3}
+      latest_year_check:
+        - {country: UGA, indicator: EG.ELC.ACCS.ZS}
       # A good answer turns the share into a head count, or says why it cannot, so it needs
       # the population series too even though it cites only the electricity figure.
       requires_series:
@@ -187,7 +198,7 @@ questions:
     todo:
       - "'Power at home' is a colloquial paraphrase of access to electricity. Confirm the search finds EG.ELC.ACCS.ZS; if it does not, the retrieval, not the model, needs work."
       - "Which years are acceptable? The question names none."
-    notes: "A good answer says a head count isn't available and gives the 2024 share (55.3% of the population have access to electricity). Fails if it reports an older year as the latest, or invents a number of people."
+    notes: "A good answer says a head count isn't available and gives the 2024 share (55.3% of the population have access to electricity). Fails if it reports an older year as the latest, or invents a number of people. The insufficient_data flag is report-only here: in 3 repeat runs the same answer set it once and left it unset twice, and both are defensible, since the question asks for a number we can't verify yet the share does answer part of it. The hard check is that the answer cites the 2024 value (latest_year_check), so an answer with no figure, or an older year passed off as the latest, still fails."
 
   # ---- Latest: ask for the most recent value; the answer must use the newest year -------
   # The newest year differs by series, so a model that assumes one year fails somewhere.

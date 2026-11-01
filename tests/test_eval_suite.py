@@ -174,14 +174,19 @@ def test_one_case_per_eval_question_with_the_expected_values_untouched() -> None
     assert [c["metadata"]["id"] for c in cases] == [q["id"] for q in QUESTIONS]
     for case, q in zip(cases, QUESTIONS, strict=True):
         assert case["vars"]["question"] == q["question"]
-        flag = next(a for a in case["assert"] if a["metric"] == "insufficient_data")
+        flag = next(a for a in case["assert"] if a["metric"].startswith("insufficient_data"))
         assert flag["config"]["insufficient_data"] is q["expect"]["insufficient_data"]
+
+
+def _flag_is_report_only(case: dict[str, Any]) -> bool:
+    return case["metadata"]["id"] == "vague-03"
 
 
 def test_every_case_checks_claims_flag_guardrails_and_latency_under_20_seconds() -> None:
     for case in generator.generate_tests():
         by_metric = {a["metric"]: a for a in case["assert"]}
-        assert {"claims", "insufficient_data", "guardrails", "latency"} <= set(by_metric)
+        flag = "insufficient_data_report" if _flag_is_report_only(case) else "insufficient_data"
+        assert {"claims", flag, "guardrails", "latency"} <= set(by_metric)
         assert by_metric["latency"]["threshold"] == 20_000
 
 
@@ -205,6 +210,18 @@ def test_a_report_only_guardrail_case_keeps_the_refusal_check_as_a_hard_gate() -
     assert next(a for a in other["assert"] if a["metric"] == "guardrails")["config"][
         "guardrails_include"
     ] == ["input_suspicious"]
+
+
+def test_vague_03_reports_the_flag_but_still_hard_checks_the_latest_year() -> None:
+    cases = {c["metadata"]["id"]: c for c in generator.generate_tests()}
+    by_metric = {a["metric"]: a for a in cases["vague-03"]["assert"]}
+    assert "insufficient_data" not in by_metric  # no hard flag check
+    assert by_metric["insufficient_data_report"]["config"] == {"insufficient_data": False}
+    assert by_metric["latest_year"]["config"]["pairs"] == [
+        {"country": "UGA", "indicator": "EG.ELC.ACCS.ZS"}
+    ]
+    for q in QUESTIONS:  # no other case relaxes the flag
+        assert bool(q["expect"].get("insufficient_data_report_only")) == (q["id"] == "vague-03")
 
 
 def test_the_rubric_text_is_the_one_asked_for() -> None:

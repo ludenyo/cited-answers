@@ -36,13 +36,20 @@ def _guardrail_asserts(expect: dict[str, Any], refused: bool) -> list[dict[str, 
 
 def _asserts(expect: dict[str, Any]) -> list[dict[str, Any]]:
     refused = bool(expect.get("refused", False))
+    # With insufficient_data_report_only the flag is checked but only reported, because either
+    # value is a defensible answer to that question.
+    flag_metric = (
+        "insufficient_data_report"
+        if expect.get("insufficient_data_report_only")
+        else "insufficient_data"
+    )
     asserts: list[dict[str, Any]] = [
         {"type": "python", "value": f"{ASSERTIONS}:claims_verified", "metric": "claims"},
         {
             "type": "python",
             "value": f"{ASSERTIONS}:insufficient_data_matches",
             "config": {"insufficient_data": expect["insufficient_data"]},
-            "metric": "insufficient_data",
+            "metric": flag_metric,
         },
         *_guardrail_asserts(expect, refused),
         {"type": "latency", "threshold": LATENCY_MS, "metric": "latency"},

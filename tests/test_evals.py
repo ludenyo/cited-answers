@@ -141,3 +141,8 @@ def test_vague_03_keeps_its_label_and_states_the_head_count_rule() -> None:
     assert vague["expect"]["values"] == {"UGA:EG.ELC.ACCS.ZS:2024": 55.3}
     assert "head count isn't available" in vague["notes"]
     assert "older year as the latest" in vague["notes"]
+    assert vague["expect"]["insufficient_data_report_only"] is True
+    assert vague["expect"]["latest_year_check"] == [
+        {"country": "UGA", "indicator": "EG.ELC.ACCS.ZS"}
+    ]
+    assert "report-only" in vague["notes"]
